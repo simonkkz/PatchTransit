@@ -16,7 +16,8 @@ import subprocess
 import tarfile
 import tempfile
 import time
-from typing import Any
+from concurrent.futures import ThreadPoolExecutor
+from typing import IO, Any
 
 MAX_ARCHIVE_BYTES = 2 * 1024**3
 MAX_FILE_BYTES = 512 * 1024**2
@@ -371,29 +372,48 @@ def compare_inventories(
     return changes, "".join(diff_lines)
 
 
+def _hash_stream(stream: IO[bytes]) -> str:
+    """Consume a command's pipe without buffering its output in memory."""
+    digest = hashlib.sha256()
+    for chunk in iter(lambda: stream.read(64 * 1024), b""):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
 def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> dict[str, Any]:
     started = time.monotonic()
     try:
-        result = subprocess.run(
+        with subprocess.Popen(
             command,
             cwd=cwd,
-            capture_output=True,
-            timeout=timeout,
-            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
-        )
-        return {
-            "exit_code": result.returncode,
-            "duration_ms": round((time.monotonic() - started) * 1000),
-            "stdout_sha256": sha256_bytes(result.stdout),
-            "stderr_sha256": sha256_bytes(result.stderr),
-        }
-    except subprocess.TimeoutExpired:
-        return {
-            "exit_code": None,
-            "timeout": True,
-            "duration_ms": round((time.monotonic() - started) * 1000),
-        }
+        ) as process:
+            assert process.stdout is not None and process.stderr is not None
+            # Both pipes must be drained concurrently to avoid deadlocking
+            # commands that write more than a pipe buffer to each stream.
+            with ThreadPoolExecutor(max_workers=2) as threads:
+                stdout_hash = threads.submit(_hash_stream, process.stdout)
+                stderr_hash = threads.submit(_hash_stream, process.stderr)
+                try:
+                    code = process.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                    return {
+                        "exit_code": None,
+                        "timeout": True,
+                        "duration_ms": round((time.monotonic() - started) * 1000),
+                    }
+                out_digest = stdout_hash.result()
+                err_digest = stderr_hash.result()
+                return {
+                    "exit_code": code,
+                    "duration_ms": round((time.monotonic() - started) * 1000),
+                    "stdout_sha256": out_digest,
+                    "stderr_sha256": err_digest,
+                }
     except OSError as exc:
         return {
             "exit_code": None,
