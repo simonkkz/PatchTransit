@@ -119,7 +119,7 @@ See [SECURITY.md](SECURITY.md) for threat model and disclosure instructions.
 
 ## Continuous integration and maintenance
 
-GitHub Actions runs Ruff lint/format, strict Pyrefly type checks on `src/`, and integration tests on Linux, macOS and Windows across Python 3.11–3.15. Renovate configuration in `renovate.json` tracks Python dev tool versions and GitHub Actions; automated update PRs require enabling the Renovate GitHub App for the repository.
+GitHub Actions runs Ruff lint/format, strict Pyrefly type checks on `src/`, and integration tests on Linux, macOS and Windows across Python 3.11–3.15. A separate workflow measures branch coverage on `main`, saves the XML report as a GitHub Actions artifact, and attempts an OIDC-authenticated upload to Codecov. Codecov outages do not block the test matrix. Renovate configuration in `renovate.json` tracks Python dev tool versions and GitHub Actions; automated update PRs require enabling the Renovate GitHub App for the repository.
 
 ## Development
 
