@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a101b">
+  <meta name="description" content="PatchTransit compares the actual effects of two patch revisions against one Git base tree. Offline, dependency-free Python CLI with JSON and HTML evidence.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="PatchTransit — Compare results, not patches">
+  <meta property="og:description" content="Apply two patch revisions to the same Git tree and inspect the real changes they produce.">
+  <meta property="og:image" content="https://simonkkz.github.io/PatchTransit/preview.png">
+  <link rel="canonical" href="https://simonkkz.github.io/PatchTransit/">
+  <title>PatchTransit · Compare results, not patches</title>
+  <style>
+    :root{color-scheme:dark;--bg:#090f1a;--surface:#111b2b;--surface2:#152137;--line:#27364d;--ink:#edf4ff;--muted:#9baac1;--accent:#a1adff;--mint:#79e4bb;--orange:#ffca8d}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:radial-gradient(ellipse 950px 700px at 80% -260px,#29356c69,transparent 80%),radial-gradient(ellipse 700px 600px at -220px 480px,#123b4b66,transparent 72%),var(--bg)}
+    a{color:inherit;text-decoration:none}
+    a:focus-visible{outline:2px solid var(--mint);outline-offset:4px;border-radius:4px}
+    .skip{position:absolute;z-index:20;left:20px;top:-80px;padding:10px;background:#fff;color:#111}
+    .skip:focus{top:20px}
+    .wrap{max-width:1140px;margin:0 auto;padding:0 28px}
+    .top{border-bottom:1px solid #2636508c;position:relative;z-index:1}
+    .top .wrap{height:80px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+    .brand{display:inline-flex;align-items:center;gap:12px;font-size:20px;font-weight:800;letter-spacing:-.05em}
+    .brand-mark{height:35px;width:35px;border:1px solid #b7c4ff5c;border-radius:11px;background:#35407072;display:grid;place-items:center;color:#d2dcff;font:700 19px/1 ui-monospace,SFMono-Regular,monospace}
+    .nav{display:flex;align-items:center;gap:26px;font-size:13px;font-weight:650;color:#bac9dd}
+    .nav a:hover,.inline-link:hover{color:var(--mint)}
+    .nav .nav-link{border:1px solid #536681;border-radius:9px;padding:9px 14px;color:var(--ink)}
+    main section{scroll-margin-top:35px}
+    .hero{padding:92px 0 72px;display:grid;grid-template-columns:1.05fr .95fr;align-items:center;gap:55px}
+    .eyebrow{font:700 11px/1.4 ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--mint)}
+    h1{font-size:clamp(42px,5.2vw,66px);line-height:1.08;letter-spacing:-.07em;margin:18px 0 22px;max-width:700px}
+    .gradient{color:#b4c1ff}
+    .lead{font-size:18px;line-height:1.75;color:var(--muted);max-width:570px;margin:0 0 32px}
+    .actions{display:flex;gap:12px;flex-wrap:wrap}
+    .button{border:1px solid #bfc9ff;border-radius:11px;padding:12px 18px;background:#abb6ff;color:#101729;font-size:14px;font-weight:800;transition:transform .15s,background .15s}
+    .button:hover{background:#d0d7ff;transform:translateY(-2px)}
+    .button.secondary{background:#141f32;color:#dbe4f5;border-color:#415574}
+    .button.secondary:hover{background:#1d2c43}
+    .tags{display:flex;gap:10px;flex-wrap:wrap;margin-top:27px}
+    .tags span{border:1px solid #32465c;background:#1521347d;border-radius:100px;padding:4px 11px;font:600 11px/1.8 ui-monospace,monospace;color:#b9ccdc}
+    .terminal{border:1px solid #354866;border-radius:16px;box-shadow:0 24px 95px #01050cb3,0 0 95px #3b5b9530;overflow:hidden;background:#0a1220;min-width:0}
+    .terminal-bar{display:flex;align-items:center;gap:7px;border-bottom:1px solid #293b53;background:#141f31;padding:14px 17px}
+    .dot{height:9px;width:9px;border-radius:50%;background:#f28b8b}.dot:nth-child(2){background:#f5cf89}.dot:nth-child(3){background:#77dba8}
+    .terminal-name{color:#9fb0c7;font:12px ui-monospace,monospace;margin-left:12px}
+    .terminal pre,.code pre{margin:0;font:13px/1.85 ui-monospace,SFMono-Regular,Consolas,monospace;overflow:auto;white-space:pre;color:#d5e5f6;tab-size:2}
+    .terminal pre{padding:26px 25px 29px;min-height:340px}
+    .comment{color:#8194ad}.command{color:#86e4c1}.prompt{color:#a9b6ff}.output{color:#ffcf99}
+    .section{padding:70px 0}
+    .section-header{max-width:670px;margin:0 0 33px}
+    .section-header h2{margin:10px 0 12px;font-size:clamp(30px,3.5vw,42px);letter-spacing:-.055em;line-height:1.2}
+    .section-header p{margin:0;color:var(--muted)}
+    .steps,.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+    .step,.card{border:1px solid var(--line);border-radius:16px;background:linear-gradient(155deg,#19253aee,#101a29);padding:26px}
+    .step-num{color:var(--mint);font:700 12px ui-monospace,monospace}
+    h3{font-size:18px;letter-spacing:-.025em;margin:16px 0 9px}
+    .step p,.card p{color:var(--muted);font-size:14px;line-height:1.7;margin:0}
+    .card h3{margin-top:0}
+    .report{display:grid;grid-template-columns:.9fr 1.1fr;gap:32px;align-items:center;border:1px solid #3b4a68;border-radius:20px;background:linear-gradient(115deg,#152239,#0d1626);padding:38px;overflow:hidden}
+    .report h2{font-size:35px;letter-spacing:-.05em;line-height:1.15;margin:12px 0 16px}
+    .report p{color:var(--muted)}
+    .report strong{color:#deebff}
+    .inline-link{color:var(--accent);font-weight:700;font-size:14px}
+    .report-image{width:100%;height:410px;object-fit:cover;object-position:top;border:1px solid #50617b;border-radius:12px;box-shadow:0 12px 45px #0008}
+    .code{border:1px solid #33435c;background:#0d1828;border-radius:15px;overflow:hidden}
+    .code-label{background:#1b2b40;border-bottom:1px solid #354863;padding:12px 18px;font:700 12px ui-monospace,monospace;color:#bccce0}
+    .code pre{padding:22px 24px}
+    .note{margin-top:18px;color:var(--muted);font-size:13px}
+    .note strong{color:var(--orange)}
+    .footer{margin-top:55px;border-top:1px solid #27364b;padding:27px 0 42px;font-size:12px;color:#97a9bf}
+    .footer .wrap{display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap}
+    .footer-links{display:flex;gap:22px;flex-wrap:wrap}
+    @media(max-width:900px){.hero{grid-template-columns:1fr;gap:36px;padding-top:66px}.terminal{max-width:700px}.report{grid-template-columns:1fr}.report-image{height:300px}.nav{gap:15px}}
+    @media(max-width:600px){.wrap{padding:0 19px}.top .wrap{height:69px}.nav a:not(.nav-link){display:none}.hero{padding:58px 0 40px}.lead{font-size:16px}.section{padding:42px 0}.steps,.cards{grid-template-columns:1fr}.terminal pre{padding:18px;font-size:11px;min-height:0}.report{padding:23px}.report h2{font-size:30px}.report-image{height:240px}.code pre{font-size:11px;padding:17px}.footer{margin-top:25px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.button{transition:none}}
+  </style>
+</head>
+<body>
+  <a href="#main" class="skip">Skip to content</a>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="#top" aria-label="PatchTransit home"><span class="brand-mark" aria-hidden="true">⇄</span> PatchTransit</a>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="#quickstart">Quickstart</a>
+        <a class="nav-link" href="https://github.com/simonkkz/PatchTransit">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main" class="wrap">
+    <section class="hero" id="top">
+      <div>
+        <div class="eyebrow">Git patch verification / Python 3.11+</div>
+        <h1>Compare the <span class="gradient">results</span>, not the patches.</h1>
+        <p class="lead">Patch hunks move. Context shifts. Line numbers change. PatchTransit applies two revisions to the same Git base tree and shows what actually changed in the resulting files.</p>
+        <div class="actions">
+          <a class="button" href="https://github.com/simonkkz/PatchTransit">Explore the repository ↗</a>
+          <a class="button secondary" href="#quickstart">Run it locally</a>
+        </div>
+        <div class="tags" aria-label="Project properties"><span>Offline by default</span><span>Standard library only</span><span>Open source · MIT</span></div>
+      </div>
+      <div class="terminal" aria-label="Illustrative command-line session">
+        <div class="terminal-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="terminal-name">patchtransit · local CLI</span></div>
+        <pre><span class="comment"># Compare patch revisions against HEAD</span>
+<span class="prompt">$</span> <span class="command">patchtransit compare</span> \
+    old.patch new.patch \
+    --repo ./project --base HEAD \
+    --html report.html \
+    --json evidence.json
+
+<span class="comment"># Illustrative result</span>
+<span class="output">PatchTransit | CHANGED | 2 effective files</span>
+Base tree: 8f20a…
+  modified src/queue.py
+  added    tests/test_queue.py
+
+<span class="comment"># Inspect the report offline</span>
+<span class="prompt">$</span> open report.html</pre>
+      </div>
+    </section>
+    <section class="section" id="how-it-works">
+      <div class="section-header">
+        <div class="eyebrow">One base, two candidates</div>
+        <h2>See the effect of each revision.</h2>
+        <p>PatchTransit compares the resulting trees, not lines from two patch files. Your original working tree, Git index and refs stay untouched.</p>
+      </div>
+      <div class="steps">
+        <article class="step"><div class="step-num">01 / Snapshot</div><h3>Read an immutable base</h3><p>Start from the same committed Git tree for both candidates, even when your current working directory is dirty.</p></article>
+        <article class="step"><div class="step-num">02 / Apply separately</div><h3>Build two isolated candidates</h3><p>Apply each patch in its own disposable directory. If a patch does not apply cleanly, the comparison fails explicitly.</p></article>
+        <article class="step"><div class="step-num">03 / Compare</div><h3>Record effective changes</h3><p>Compare files, modes, hashes and optional test results, then export a unified diff, JSON evidence and HTML report.</p></article>
+      </div>
+    </section>
+    <section class="section" aria-labelledby="evidence-title">
+      <div class="report">
+        <div>
+          <div class="eyebrow">Portable evidence</div>
+          <h2 id="evidence-title">A report you can inspect offline.</h2>
+          <p>The generated HTML report includes changed paths, content hashes, file modes and readable unified diffs. JSON output is available for automation, with all changed files included even when the text preview is capped.</p>
+          <p><strong>No hosted service or API key required.</strong> Reports are generated locally, and nothing is uploaded by the application.</p>
+          <a class="inline-link" href="https://github.com/simonkkz/PatchTransit/blob/main/docs/preview.png">View the sample report ↗</a>
+        </div>
+        <img class="report-image" src="preview.png" alt="Example PatchTransit report with effective file changes and colored unified diff" width="1440" height="1399" loading="lazy">
+      </div>
+    </section>
+    <section class="section" aria-labelledby="features-title">
+      <div class="section-header">
+        <div class="eyebrow">Built for review</div>
+        <h2 id="features-title">Useful details, without extra machinery.</h2>
+      </div>
+      <div class="cards">
+        <article class="card"><h3>Readable changes</h3><p>Track edits, new and deleted files, binary payloads, checksums and executable-mode changes where supported.</p></article>
+        <article class="card"><h3>Optional verification</h3><p>Run the same command separately on both candidates with an explicit <code>--execute</code> flag. Compare their exit results without storing raw logs.</p></article>
+        <article class="card"><h3>Predictable limits</h3><p>Bound archive and file sizes. Refuse unsafe paths and inapplicable patches. Keep the complete JSON change manifest when a text preview is truncated.</p></article>
+      </div>
+    </section>
+    <section class="section" id="quickstart">
+      <div class="section-header">
+        <div class="eyebrow">Get started</div>
+        <h2>Try it on your machine.</h2>
+        <p>Requires Python 3.11 or later and Git. No runtime packages beyond Python's standard library.</p>
+      </div>
+      <div class="code"><div class="code-label">Terminal · install from source</div>
+        <pre>git clone https://github.com/simonkkz/PatchTransit.git
+cd PatchTransit
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
+
+patchtransit verify changes.patch --repo . --base HEAD --html report.html</pre>
+      </div>
+      <p class="note">On Windows, activate the virtual environment using <code>.venv\Scripts\Activate.ps1</code>. <strong>Safety:</strong> Optional test execution runs code with your user permissions. PatchTransit is not a sandbox. Use a VM/container for untrusted code.</p>
+    </section>
+  </main>
+  <footer class="footer"><div class="wrap"><span>PatchTransit · Local, reproducible patch evidence · MIT</span><div class="footer-links"><a href="https://github.com/simonkkz/PatchTransit">Source</a><a href="https://github.com/simonkkz/PatchTransit/releases">Releases</a><a href="https://github.com/simonkkz/PatchTransit/blob/main/SECURITY.md">Security</a></div></div></footer>
+</body>
+</html>
