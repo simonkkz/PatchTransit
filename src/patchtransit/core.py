@@ -259,14 +259,17 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
             elif path.is_file():
                 # Store digests instead of loading huge binary assets into RAM.
                 # Ordinary source remains in-memory for readable unified diffs.
+                # Git tracks the executable bit. A mode-only patch is a real
+                # change, even when the file's SHA-256 stays identical.
+                suffix = "+x" if path.stat().st_mode & 0o111 else ""
                 if path.stat().st_size > MAX_DIFF_TEXT_BYTES:
                     digest = hashlib.sha256()
                     with path.open("rb") as source:
                         for block in iter(lambda: source.read(1024 * 1024), b""):
                             digest.update(block)
-                    items[rel] = ("filehash", digest.hexdigest())
+                    items[rel] = ("filehash" + suffix, digest.hexdigest())
                 else:
-                    items[rel] = ("file", path.read_bytes())
+                    items[rel] = ("file" + suffix, path.read_bytes())
     return items
 
 
@@ -275,11 +278,11 @@ def _digest(value: tuple[str, bytes | str] | None) -> str | None:
     if value is None:
         return None
     kind, data = value
-    if kind == "filehash":
+    if kind.startswith("filehash"):
         # Already streamed and hashed from raw on-disk bytes.
         assert isinstance(data, str)
         return data
-    if kind == "file":
+    if kind.startswith("file"):
         assert isinstance(data, bytes)
         return sha256_bytes(data)
     assert kind == "link" and isinstance(data, str)
@@ -303,10 +306,32 @@ def compare_inventories(
                 "change": state,
                 "before_sha256": _digest(a),
                 "after_sha256": _digest(b),
+                "before_executable": a[0].endswith("+x")
+                if a and a[0].startswith("file")
+                else None,
+                "after_executable": b[0].endswith("+x")
+                if b and b[0].startswith("file")
+                else None,
             }
         )
-        aa = a[1] if a and a[0] == "file" else None
-        bb = b[1] if b and b[0] == "file" else None
+        if (
+            a
+            and b
+            and a[0].startswith("file")
+            and b[0].startswith("file")
+            and a[0].endswith("+x") != b[0].endswith("+x")
+        ):
+            old_mode = "100755" if a[0].endswith("+x") else "100644"
+            new_mode = "100755" if b[0].endswith("+x") else "100644"
+            diff_lines.extend(
+                [
+                    f"diff --git a/{filename} b/{filename}\n",
+                    f"old mode {old_mode}\n",
+                    f"new mode {new_mode}\n",
+                ]
+            )
+        aa = a[1] if a and a[0] in ("file", "file+x") else None
+        bb = b[1] if b and b[0] in ("file", "file+x") else None
         if aa is not None and not isinstance(aa, bytes):
             aa = None
         if bb is not None and not isinstance(bb, bytes):
@@ -417,12 +442,13 @@ def evaluate(
             h = hashlib.sha256()
             for key, value in sorted(items.items()):
                 h.update(key.encode("utf-8", "surrogateescape") + b"\x00")
+                h.update(value[0].encode() + b"\x00")
                 h.update((_digest(value) or "").encode() + b"\n")
             return h.hexdigest()
 
         old_hash = state_hash(first)
         new_hash = state_hash(second)
-        checks = None
+        checks: dict[str, Any] | None = None
         if command:
             checks = {
                 "command": command,

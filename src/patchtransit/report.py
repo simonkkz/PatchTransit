@@ -30,7 +30,9 @@ def json_report(result: dict[str, Any]) -> str:
 
 
 def html_report(result: dict[str, Any]) -> str:
-    e = lambda x: html.escape(str(x), quote=True)
+    def e(value: object) -> str:
+        return html.escape(str(value), quote=True)
+
     badge = e(result["verdict"]).upper()
     if result["verdict"] == "regression":
         color = "#ff8a8a"
@@ -38,9 +40,19 @@ def html_report(result: dict[str, Any]) -> str:
         color = "#4cebb7"
     else:
         color = "#fdbe65"
+
+    def mode_note(item: dict[str, Any]) -> str:
+        before = item.get("before_executable")
+        after = item.get("after_executable")
+        if before is None or after is None or before == after:
+            return ""
+        before_mode = "100755" if before else "100644"
+        after_mode = "100755" if after else "100644"
+        return f'<small class="mode">mode {before_mode} → {after_mode}</small>'
+
     rows = "\n".join(
         f"<tr><td><code>{e(item['path'])}</code></td>"
-        f"<td>{e(item['change'])}</td><td><small>{e((item['before_sha256'] or '-')[:12])}</small></td>"
+        f"<td>{e(item['change'])}{mode_note(item)}</td><td><small>{e((item['before_sha256'] or '-')[:12])}</small></td>"
         f"<td><small>{e((item['after_sha256'] or '-')[:12])}</small></td></tr>"
         for item in result["changes"]
     )
@@ -84,7 +96,7 @@ section{{margin-top:32px;padding:25px;background:var(--surface);border:1px solid
 .columns{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px}}
 .metric{{background:#101725;padding:17px 20px;border:1px solid var(--stroke);border-radius:12px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}}
 .metric p{{color:var(--ink);font-size:26px;font-weight:700;margin:0}}code,pre{{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}}code{{font-size:12px;overflow-wrap:anywhere}}
-table{{border-collapse:collapse;width:100%;table-layout:fixed}}th,td{{text-align:left;padding:12px;border-bottom:1px solid var(--stroke);overflow-wrap:anywhere}}th{{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.09em}}th:first-child{{width:53%}}.empty{{text-align:center;color:var(--muted);padding:30px}}
+table{{border-collapse:collapse;width:100%;table-layout:fixed}}th,td{{text-align:left;padding:12px;border-bottom:1px solid var(--stroke);overflow-wrap:anywhere}}.mode{{display:block;font-size:11px;color:#b9a3ff}}th{{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.09em}}th:first-child{{width:53%}}.empty{{text-align:center;color:var(--muted);padding:30px}}
 pre{{font-size:12px;line-height:1.55;overflow:auto;max-height:640px;background:#0b111b;border:1px solid var(--stroke);padding:19px;border-radius:12px}}
 pre span{{display:block;min-height:1.5em;white-space:pre}}pre .added{{color:#91e6b4;background:#15342488}}pre .removed{{color:#ffa19d;background:#3c1b2788}}pre .hunk{{color:#9db8ff}}pre .file{{color:#d4b9ff}}
 footer{{padding:28px 0;color:var(--muted);font-size:12px}}@media(max-width:600px){{h1{{font-size:29px}}section{{padding:15px}}main{{padding:28px 14px}}}}

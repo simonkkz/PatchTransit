@@ -22,7 +22,7 @@ A 40-file diff gets updated after review. Did it fix the race, change a test, or
 
 - Works with Git patch files (`git diff > changes.patch`), including text and binary changes.
 - Never checks out, stages, rebases, or modifies your working repository.
-- Highlights newly added, removed, and changed effects between patch revisions.
+- Highlights newly added, removed, and changed effects between patch revisions, including executable-mode changes on POSIX systems.
 - Optional test command runs separately on **both** candidate trees, with explicit opt-in.
 - Generates a standalone HTML report, machine-readable JSON, and a traditional unified diff.
 - No LLM, API key, account, service, telemetry, or runtime Python dependencies.
@@ -79,7 +79,7 @@ patchtransit inspect before.patch
 
 ## What is actually compared?
 
-The output is determined by the full file state after applying each patch, not by subtraction of patch text. For every changed file, the JSON records the path, change type and SHA-256 digest of both versions. Plain UTF-8 changes appear in the unified diff. Binary/large-file changes are recorded by their checksums rather than dumped into the report.
+The output is determined by the full file state after applying each patch, not by subtraction of patch text. Executable permission changes are represented as mode metadata on platforms that preserve POSIX file modes; mode-only changes may not be observable on Windows filesystems. For every changed file, the JSON records the path, change type and SHA-256 digest of both versions. Plain UTF-8 changes appear in the unified diff. Binary/large-file changes are recorded by their checksums rather than dumped into the report.
 
 The **common base tree matters**. Patches based on different commits should be rebased onto a common base before comparing them. PatchTransit refuses to compare a revision that fails to apply cleanly.
 
@@ -117,11 +117,18 @@ See [SECURITY.md](SECURITY.md) for threat model and disclosure instructions.
 
 [`git range-diff`](https://git-scm.com/docs/git-range-diff) compares **commit series** and is the right tool for iterative commit review. PatchTransit focuses on two standalone `.patch` files applied to a common base, compares their **complete resulting file trees**, and optionally executes the same verification command against each result. It complements rather than replaces Git.
 
+## Continuous integration and maintenance
+
+GitHub Actions runs Ruff lint/format, strict Pyrefly type checks on `src/`, and integration tests on Linux, macOS and Windows across Python 3.11–3.15. Renovate configuration in `renovate.json` tracks Python dev tool versions and GitHub Actions; automated update PRs require enabling the Renovate GitHub App for the repository.
+
 ## Development
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
-python -m pip install -e .
+python -m pip install -e '.[dev]'
+ruff check src tests
+ruff format --check src tests
+pyrefly check
 python -m unittest discover -s tests -v
 bash examples/demo.sh
 ```

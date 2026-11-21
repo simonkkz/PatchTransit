@@ -209,6 +209,29 @@ class Project(unittest.TestCase):
         with self.assertRaises(PatchTransitError):
             patch_metadata(self.new)
 
+    @unittest.skipIf(
+        sys.platform == "win32", "Git for Windows does not track POSIX executable bits"
+    )
+    def test_executable_mode_only_patch_is_detected(self):
+        script = self.repo / "runner.sh"
+        script.write_text("#!/bin/sh\necho safe\n")
+        cmd("git", "add", "runner.sh", cwd=self.repo)
+        cmd("git", "commit", "-qm", "add runner", cwd=self.repo)
+        script.chmod(0o755)
+        self.new.write_bytes(cmd("git", "diff", "--binary", cwd=self.repo).stdout)
+        script.chmod(0o644)
+        result = evaluate(self.repo, "HEAD", None, self.new)
+        self.assertEqual(["runner.sh"], [c["path"] for c in result["changes"]])
+        self.assertEqual(
+            result["changes"][0]["before_sha256"], result["changes"][0]["after_sha256"]
+        )
+        self.assertFalse(result["changes"][0]["before_executable"])
+        self.assertTrue(result["changes"][0]["after_executable"])
+        self.assertIn("old mode 100644", result["effective_diff"])
+        self.assertIn("new mode 100755", result["effective_diff"])
+        self.assertNotEqual(result["old_state_sha256"], result["new_state_sha256"])
+        self.assertIn("mode 100644 → 100755", html_report(result))
+
     def test_git_tree_export_matches_base(self):
         root, tree = repository(self.repo, "HEAD")
         dest = self.dir / "export"
