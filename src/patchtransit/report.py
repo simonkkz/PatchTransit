@@ -76,17 +76,37 @@ def html_report(result: dict[str, Any]) -> str:
     )
     if not rows:
         rows = '<tr><td colspan="4" class="empty">No effective changes between patches.</td></tr>'
+
+    def check_status(check: dict[str, Any]) -> str:
+        if check.get("timeout"):
+            return "Timed out"
+        if error := check.get("error"):
+            return f"Error: {error}"
+        code = check.get("exit_code")
+        return f"Exit {code}" if code is not None else "Unavailable"
+
+    def check_metric(title: str, check: dict[str, Any]) -> str:
+        digests = "".join(
+            f'<small class="check-digest">{label}: <code>{e(check[key])}</code></small>'
+            for label, key in (
+                ("stdout SHA-256", "stdout_sha256"),
+                ("stderr SHA-256", "stderr_sha256"),
+            )
+            if check.get(key)
+        )
+        return (
+            f'<div class="metric">{title}<p>{e(check_status(check))}</p>'
+            f"<small>{e(check.get('duration_ms'))} ms</small>{digests}</div>"
+        )
+
     checks = result.get("checks")
     checks_view = ""
     if checks:
-        before, after = checks["old"], checks["new"]
         checks_view = (
             f'<section><h2>Execution evidence</h2><p class="muted">'
             f"Command: <code>{e(' '.join(checks['command']))}</code></p>"
-            f'<div class="columns"><div class="metric">OLD<p>Exit {e(before.get("exit_code"))}</p>'
-            f"<small>{e(before.get('duration_ms'))} ms</small></div>"
-            f'<div class="metric">NEW<p>Exit {e(after.get("exit_code"))}</p>'
-            f"<small>{e(after.get('duration_ms'))} ms</small></div></div></section>"
+            f'<div class="columns">{check_metric("OLD", checks["old"])}'
+            f"{check_metric('NEW', checks['new'])}</div></section>"
         )
     colored_diff = []
     diff_lines = (
@@ -118,7 +138,7 @@ h1{{font-size:37px;letter-spacing:-.055em;margin:0}}h2{{font-size:20px;margin:0 
 section{{margin-top:32px;padding:25px;background:var(--surface);border:1px solid var(--stroke);border-radius:16px}}
 .columns{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px}}
 .metric{{background:#101725;padding:17px 20px;border:1px solid var(--stroke);border-radius:12px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}}
-.metric p{{color:var(--ink);font-size:26px;font-weight:700;margin:0}}code,pre{{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}}code{{font-size:12px;overflow-wrap:anywhere}}
+.metric p{{color:var(--ink);font-size:26px;font-weight:700;margin:0;overflow-wrap:anywhere}}.check-digest{{display:block;overflow-wrap:anywhere;margin-top:6px}}code,pre{{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}}code{{font-size:12px;overflow-wrap:anywhere}}
 table{{border-collapse:collapse;width:100%;table-layout:fixed}}th,td{{text-align:left;padding:12px;border-bottom:1px solid var(--stroke);overflow-wrap:anywhere}}.mode{{display:block;font-size:11px;color:#b9a3ff}}th{{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.09em}}th:first-child{{width:53%}}.empty{{text-align:center;color:var(--muted);padding:30px}}
 pre{{font-size:12px;line-height:1.55;overflow:auto;max-height:640px;background:#0b111b;border:1px solid var(--stroke);padding:19px;border-radius:12px}}
 pre span{{display:block;min-height:1.5em;white-space:pre}}pre .added{{color:#91e6b4;background:#15342488}}pre .removed{{color:#ffa19d;background:#3c1b2788}}pre .hunk{{color:#9db8ff}}pre .file{{color:#d4b9ff}}
