@@ -6,6 +6,7 @@ import html
 import json
 import os
 import pathlib
+import re
 import tempfile
 from typing import Any
 
@@ -27,12 +28,28 @@ def atomic_write(path: pathlib.Path, contents: str) -> None:
 
 
 def json_report(result: dict[str, Any]) -> str:
-    return json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    # POSIX Git paths may contain arbitrary bytes. Preserve undecodable bytes
+    # as JSON Unicode escapes while keeping valid UTF-8 text readable.
+    encoded = json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2)
+    return (
+        re.sub("[\ud800-\udfff]", lambda match: f"\\u{ord(match.group()):04x}", encoded)
+        + "\n"
+    )
 
 
 def html_report(result: dict[str, Any]) -> str:
     def e(value: object) -> str:
-        return html.escape(str(value), quote=True)
+        # Invalid UTF-8 bytes from POSIX filenames cannot be embedded directly
+        # in an HTML document. Display them as explicit, reversible escapes.
+        display = "".join(
+            f"\\x{ord(char) - 0xDC00:02x}"
+            if 0xDC80 <= ord(char) <= 0xDCFF
+            else f"\\u{ord(char):04x}"
+            if 0xD800 <= ord(char) <= 0xDFFF
+            else char
+            for char in str(value)
+        )
+        return html.escape(display, quote=True)
 
     badge = e(result["verdict"]).upper()
     if result["verdict"] == "regression":
