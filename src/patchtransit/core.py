@@ -67,9 +67,13 @@ def git(args: list[str], cwd: pathlib.Path, *, timeout: int = 120) -> bytes:
 
 
 def repository(path: pathlib.Path, revision: str) -> tuple[pathlib.Path, str]:
-    root = pathlib.Path(
-        os.fsdecode(git(["rev-parse", "--show-toplevel"], path)).strip()
-    ).resolve()
+    root_output = git(["rev-parse", "--show-toplevel"], path)
+    if not root_output.endswith(b"\n"):
+        raise PatchTransitError("Git returned an invalid repository root")
+    root_bytes = root_output[:-1]
+    if os.name == "nt" and root_bytes.endswith(b"\r"):
+        root_bytes = root_bytes[:-1]
+    root = pathlib.Path(os.fsdecode(root_bytes)).resolve()
     if not root.is_dir():
         raise PatchTransitError("Repository root is not a directory")
     # All candidates begin at the SAME immutable tree, even if the worktree is dirty.
