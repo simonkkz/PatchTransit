@@ -290,6 +290,15 @@ def _digest(value: tuple[str, bytes | str] | None) -> str | None:
     return sha256_bytes(b"symlink\x00" + data.encode("utf-8", "surrogateescape"))
 
 
+def _lf_lines(text: str) -> list[str]:
+    """Split on LF only; str.splitlines() also splits valid text at VT/FF/NEL."""
+    parts = text.split("\n")
+    lines = [part + "\n" for part in parts[:-1]]
+    if parts[-1]:
+        lines.append(parts[-1])
+    return lines
+
+
 def compare_inventories(
     left: dict[str, tuple[str, bytes | str]], right: dict[str, tuple[str, bytes | str]]
 ) -> tuple[list[dict[str, Any]], str]:
@@ -376,8 +385,8 @@ def compare_inventories(
             )
             continue
         try:
-            a_lines = aa.decode("utf-8").splitlines(keepends=True)
-            b_lines = bb.decode("utf-8").splitlines(keepends=True)
+            a_lines = _lf_lines(aa.decode("utf-8"))
+            b_lines = _lf_lines(bb.decode("utf-8"))
         except UnicodeDecodeError:
             append_diff(f"--- {filename}: non-UTF-8 contents differ (hashes in JSON)\n")
             continue
@@ -385,6 +394,10 @@ def compare_inventories(
             a_lines, b_lines, fromfile=f"old/{filename}", tofile=f"new/{filename}", n=3
         ):
             append_diff(line if line.endswith("\n") else line + "\n")
+            # difflib omits the EOF marker; without it, the diff can falsely
+            # add trailing newlines and even fail to apply to the old file.
+            if not line.endswith("\n") and not truncated:
+                append_diff("\\ No newline at end of file\n")
             if truncated:
                 break
     if truncated:
