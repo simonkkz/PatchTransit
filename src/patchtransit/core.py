@@ -16,7 +16,6 @@ import subprocess
 import tarfile
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
 from typing import IO, Any
 
 MAX_ARCHIVE_BYTES = 2 * 1024**3
@@ -24,6 +23,7 @@ MAX_FILE_BYTES = 512 * 1024**2
 MAX_DIFF_TEXT_BYTES = 2 * 1024**2
 MAX_DIFF_LINES = 16000
 MAX_DIFF_OUTPUT_BYTES = 8 * 1024**2
+MAX_COMMAND_OUTPUT_BYTES = 64 * 1024**2
 
 
 class PatchTransitError(Exception):
@@ -474,47 +474,78 @@ def compare_inventories(
 
 
 def _hash_stream(stream: IO[bytes]) -> str:
-    """Consume a command's pipe without buffering its output in memory."""
     digest = hashlib.sha256()
-    for chunk in iter(lambda: stream.read(64 * 1024), b""):
+    stream.seek(0)
+    remaining = os.fstat(stream.fileno()).st_size
+    while remaining:
+        chunk = stream.read(min(64 * 1024, remaining))
+        if not chunk:
+            break
         digest.update(chunk)
+        remaining -= len(chunk)
     return digest.hexdigest()
 
 
 def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> dict[str, Any]:
     started = time.monotonic()
     try:
-        with subprocess.Popen(
-            command,
-            cwd=cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-        ) as process:
-            assert process.stdout is not None and process.stderr is not None
-            # Both pipes must be drained concurrently to avoid deadlocking
-            # commands that write more than a pipe buffer to each stream.
-            with ThreadPoolExecutor(max_workers=2) as threads:
-                stdout_hash = threads.submit(_hash_stream, process.stdout)
-                stderr_hash = threads.submit(_hash_stream, process.stderr)
-                try:
-                    code = process.wait(timeout=timeout)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
+        # Anonymous temporary files avoid waiting for pipes inherited by a
+        # command's descendants. They are removed on close, not in evidence.
+        with (
+            tempfile.TemporaryFile(mode="w+b") as stdout,
+            tempfile.TemporaryFile(mode="w+b") as stderr,
+        ):
+            with subprocess.Popen(
+                command,
+                cwd=cwd,
+                stdout=stdout,
+                stderr=stderr,
+                stdin=subprocess.DEVNULL,
+            ) as process:
+                deadline = started + timeout
+                while True:
+                    if (
+                        os.fstat(stdout.fileno()).st_size > MAX_COMMAND_OUTPUT_BYTES
+                        or os.fstat(stderr.fileno()).st_size > MAX_COMMAND_OUTPUT_BYTES
+                    ):
+                        if process.poll() is None:
+                            process.kill()
+                            process.wait()
+                        return {
+                            "exit_code": None,
+                            "error": "OutputLimitExceeded",
+                            "duration_ms": round((time.monotonic() - started) * 1000),
+                        }
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        if process.poll() is None:
+                            process.kill()
+                            process.wait()
+                        return {
+                            "exit_code": None,
+                            "timeout": True,
+                            "duration_ms": round((time.monotonic() - started) * 1000),
+                        }
+                    try:
+                        code = process.wait(timeout=min(remaining, 0.1))
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+                if (
+                    os.fstat(stdout.fileno()).st_size > MAX_COMMAND_OUTPUT_BYTES
+                    or os.fstat(stderr.fileno()).st_size > MAX_COMMAND_OUTPUT_BYTES
+                ):
                     return {
                         "exit_code": None,
-                        "timeout": True,
+                        "error": "OutputLimitExceeded",
                         "duration_ms": round((time.monotonic() - started) * 1000),
                     }
-                out_digest = stdout_hash.result()
-                err_digest = stderr_hash.result()
-                return {
-                    "exit_code": code,
-                    "duration_ms": round((time.monotonic() - started) * 1000),
-                    "stdout_sha256": out_digest,
-                    "stderr_sha256": err_digest,
-                }
+            return {
+                "exit_code": code,
+                "duration_ms": round((time.monotonic() - started) * 1000),
+                "stdout_sha256": _hash_stream(stdout),
+                "stderr_sha256": _hash_stream(stderr),
+            }
     except OSError as exc:
         return {
             "exit_code": None,

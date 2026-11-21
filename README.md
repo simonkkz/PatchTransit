@@ -110,7 +110,7 @@ Exit codes: `0` for successful comparison with no confirmed regression, `1` if t
 
 - The tool never executes the patch itself. The optional `--execute` runs a command in the patched tree and has **no OS sandbox**.
 - Reports contain code paths and **diff contents**. Inspect before sharing for proprietary source, personal data, or secrets.
-- The JSON records test exit codes, elapsed time and hashes of stdout/stderr. It intentionally does **not** copy raw test logs or environment variables into evidence. Output is hashed while streaming, without accumulating unbounded logs in process memory.
+- The JSON records test exit codes, elapsed time and hashes of stdout/stderr. It intentionally does **not** copy raw test logs or environment variables into evidence. Command output is captured in temporary files and hashed in chunks rather than accumulated in process memory. Temporary files are deleted after each check, and each output stream has a 64 MiB safety cap.
 - Git archive entries are extracted into a temporary directory with traversal and absolute-symlink protection. Unexpected archive entry types are rejected.
 - Patch paths undergo safety checks; Git itself validates whether a patch applies. Simple renames work; unusual multi-path encodings that cannot be parsed safely are rejected.
 - Every CLI test should be considered a normal execution of project code with your privileges.

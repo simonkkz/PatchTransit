@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -69,3 +70,46 @@ class CommandEvidence(unittest.TestCase):
         )
         self.assertIsNone(result["exit_code"])
         self.assertEqual("FileNotFoundError", result["error"])
+
+    @unittest.skipIf(
+        sys.platform == "win32", "Windows child handles are not guaranteed to inherit"
+    )
+    def test_inherited_output_handles_do_not_block_after_parent_exits(self):
+        script = (
+            "import subprocess,sys; "
+            "subprocess.Popen([sys.executable,'-c','import time; time.sleep(4)']); "
+            "sys.stdout.buffer.write(b'parent\\n')"
+        )
+        started = time.monotonic()
+        result = execute([sys.executable, "-c", script], self.root, timeout=2)
+        elapsed = time.monotonic() - started
+        self.assertEqual(0, result["exit_code"])
+        self.assertLess(elapsed, 3)
+        self.assertEqual(
+            hashlib.sha256(b"parent\n").hexdigest(), result["stdout_sha256"]
+        )
+
+    def test_excessive_output_is_bounded(self):
+        from unittest.mock import patch
+
+        script = "import sys; sys.stdout.buffer.write(b'x' * 8192)"
+        with patch("patchtransit.core.MAX_COMMAND_OUTPUT_BYTES", 1024):
+            result = execute([sys.executable, "-c", script], self.root, timeout=10)
+        self.assertIsNone(result["exit_code"])
+        self.assertEqual("OutputLimitExceeded", result["error"])
+        self.assertNotIn("stdout_sha256", result)
+
+    def test_output_limit_interrupts_a_still_running_command(self):
+        from unittest.mock import patch
+
+        script = (
+            "import sys,time; "
+            "sys.stderr.buffer.write(b'x' * 8192); "
+            "sys.stderr.buffer.flush(); "
+            "time.sleep(4)"
+        )
+        with patch("patchtransit.core.MAX_COMMAND_OUTPUT_BYTES", 1024):
+            result = execute([sys.executable, "-c", script], self.root, timeout=2)
+        self.assertEqual("OutputLimitExceeded", result["error"])
+        self.assertIsNone(result["exit_code"])
+        self.assertNotIn("timeout", result)
