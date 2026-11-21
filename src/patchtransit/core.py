@@ -326,6 +326,25 @@ def _lf_lines(text: str) -> list[str]:
     return lines
 
 
+def _git_path(path: str) -> str:
+    """Git's C-style pathname quoting for unified patch headers."""
+    data = path.encode("utf-8", "surrogateescape")
+    if all(32 <= byte <= 126 and byte not in (34, 92) for byte in data):
+        return path
+    escaped: list[str] = []
+    controls = {9: r"\t", 10: r"\n", 13: r"\r"}
+    for byte in data:
+        if byte in (34, 92):
+            escaped.append("\\" + chr(byte))
+        elif byte in controls:
+            escaped.append(controls[byte])
+        elif 32 <= byte <= 126:
+            escaped.append(chr(byte))
+        else:
+            escaped.append(f"\\{byte:03o}")
+    return '"' + "".join(escaped) + '"'
+
+
 def compare_inventories(
     left: dict[str, tuple[str, bytes | str]], right: dict[str, tuple[str, bytes | str]]
 ) -> tuple[list[dict[str, Any]], str]:
@@ -381,7 +400,7 @@ def compare_inventories(
             old_mode = "100755" if a[0].endswith("+x") else "100644"
             new_mode = "100755" if b[0].endswith("+x") else "100644"
             for line in (
-                f"diff --git a/{filename} b/{filename}\n",
+                f"diff --git {_git_path(f'a/{filename}')} {_git_path(f'b/{filename}')}\n",
                 f"old mode {old_mode}\n",
                 f"new mode {new_mode}\n",
             ):
@@ -417,8 +436,26 @@ def compare_inventories(
         except UnicodeDecodeError:
             append_diff(f"--- {filename}: non-UTF-8 contents differ (hashes in JSON)\n")
             continue
+        if a is None or b is None:
+            append_diff(
+                f"diff --git {_git_path(f'a/{filename}')} {_git_path(f'b/{filename}')}\n"
+            )
+            if a is None:
+                append_diff(
+                    f"new file mode {'100755' if b and b[0].endswith('+x') else '100644'}\n"
+                )
+            else:
+                append_diff(
+                    f"deleted file mode {'100755' if a[0].endswith('+x') else '100644'}\n"
+                )
+        if truncated:
+            continue
         for line in difflib.unified_diff(
-            a_lines, b_lines, fromfile=f"old/{filename}", tofile=f"new/{filename}", n=3
+            a_lines,
+            b_lines,
+            fromfile="/dev/null" if a is None else _git_path(f"old/{filename}"),
+            tofile="/dev/null" if b is None else _git_path(f"new/{filename}"),
+            n=3,
         ):
             append_diff(line if line.endswith("\n") else line + "\n")
             # difflib omits the EOF marker; without it, the diff can falsely

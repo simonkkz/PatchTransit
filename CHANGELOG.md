@@ -10,6 +10,7 @@
 - Keep the complete changed-file manifest even when the readable diff preview reaches its line/size limits.
 - Avoid misleading text diffs when a file transitions from a large/symlink state to ordinary text.
 - Align the CLI version string with the package version.
+- Preserve creation and deletion semantics for text and empty-file diffs, including unusual filenames.
 
 ## 0.1.0 — initial development snapshot
 
