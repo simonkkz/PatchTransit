@@ -36,7 +36,12 @@ class CommandEvidence(unittest.TestCase):
         self.assertNotIn("stderr", result)
 
     def test_nonzero_exit_still_hashes_both_streams(self):
-        script = "import sys; print('out'); print('err', file=sys.stderr); sys.exit(7)"
+        script = (
+            "import sys; "
+            "sys.stdout.buffer.write(b'out\\n'); "
+            "sys.stderr.buffer.write(b'err\\n'); "
+            "sys.exit(7)"
+        )
         result = execute([sys.executable, "-c", script], self.root, timeout=10)
         self.assertEqual(7, result["exit_code"])
         self.assertEqual(hashlib.sha256(b"out\n").hexdigest(), result["stdout_sha256"])
