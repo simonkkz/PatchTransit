@@ -142,6 +142,8 @@ def _nul_records(stream: IO[bytes]) -> Iterator[bytes]:
     while block := stream.read(8192):
         pending.extend(block)
         while (separator := pending.find(0)) >= 0:
+            if separator > MAX_TREE_ENTRY_BYTES:
+                raise PatchTransitError("Git tree has an oversized path entry")
             yield bytes(pending[:separator])
             del pending[: separator + 1]
         if len(pending) > MAX_TREE_ENTRY_BYTES:
@@ -152,15 +154,20 @@ def _nul_records(stream: IO[bytes]) -> Iterator[bytes]:
 
 def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
     """Copy exact tracked Git blobs into a bounded temporary candidate tree."""
+    # Partial clones may lazily fetch missing blobs. Treat them as unavailable
+    # instead of allowing Git to make an implicit network request.
+    git_env = {**os.environ, "GIT_NO_LAZY_FETCH": "1"}
     tree_proc = subprocess.Popen(
         ["git", "ls-tree", "-r", "-z", "--full-tree", tree],
         cwd=repo,
+        env=git_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
     proc = subprocess.Popen(
         ["git", "cat-file", "--batch"],
         cwd=repo,
+        env=git_env,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -171,8 +178,6 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
     links: list[tuple[pathlib.Path, str]] = []
     try:
         for record in _nul_records(tree_proc.stdout):
-            if not record:
-                continue
             heading, separator, path = record.partition(b"\t")
             parts = heading.split(b" ")
             if not separator or len(parts) != 3:
@@ -188,8 +193,10 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
             mode = mode_bytes.decode("ascii")
             proc.stdin.write(oid + b"\n")
             proc.stdin.flush()
-            header = proc.stdout.readline().rstrip(b"\n")
-            parts = header.split(b" ")
+            header_line = proc.stdout.readline()
+            if not header_line.endswith(b"\n"):
+                raise PatchTransitError(f"Invalid Git blob header: {item}")
+            parts = header_line[:-1].split(b" ")
             if len(parts) != 3 or parts[0] != oid or parts[1] != b"blob":
                 raise PatchTransitError(f"Cannot read Git blob: {item}")
             try:
