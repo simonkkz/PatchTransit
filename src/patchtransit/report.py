@@ -11,7 +11,8 @@ from typing import Any
 
 
 def atomic_write(path: pathlib.Path, contents: str) -> None:
-    path = path.expanduser().resolve()
+    path = path.expanduser()
+    path = path.parent.resolve() / path.name
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
