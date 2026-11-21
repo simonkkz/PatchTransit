@@ -71,7 +71,12 @@ def html_report(result: dict[str, Any]) -> str:
             f"<small>{e(after.get('duration_ms'))} ms</small></div></div></section>"
         )
     colored_diff = []
-    for line in result["effective_diff"].splitlines():
+    diff_lines = (
+        result["effective_diff"].split("\n") if result["effective_diff"] else []
+    )
+    if diff_lines and not diff_lines[-1]:
+        diff_lines.pop()
+    for line in diff_lines:
         cls = ""
         if line.startswith("+") and not line.startswith("+++ "):
             cls = "added"
