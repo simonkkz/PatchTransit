@@ -6,6 +6,7 @@ import argparse
 import pathlib
 import shlex
 import sys
+from typing import Any
 
 from . import __version__
 from .core import PatchTransitError, evaluate, patch_metadata
@@ -75,6 +76,15 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
+def _check_status(check: dict[str, Any]) -> str:
+    if check.get("timeout"):
+        return "timeout"
+    if error := check.get("error"):
+        return f"error:{error}"
+    code = check.get("exit_code")
+    return str(code) if code is not None else "unknown"
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
@@ -115,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
             old_check = outcome["checks"]["old"]
             new_check = outcome["checks"]["new"]
             print(
-                f"Checks: old={old_check.get('exit_code')} new={new_check.get('exit_code')}"
+                f"Checks: old={_check_status(old_check)} new={_check_status(new_check)}"
             )
         if args.json:
             atomic_write(args.json, json_report(outcome))
