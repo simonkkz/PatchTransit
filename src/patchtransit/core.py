@@ -271,14 +271,19 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
 
 
 def _digest(value: tuple[str, bytes | str] | None) -> str | None:
+    """Raw SHA-256 for regular files; namespaced SHA-256 for symlink targets."""
     if value is None:
         return None
-    data = (
-        value[1].encode("utf-8", "surrogateescape")
-        if isinstance(value[1], str)
-        else value[1]
-    )
-    return sha256_bytes(value[0].encode() + b"\x00" + data)
+    kind, data = value
+    if kind == "filehash":
+        # Already streamed and hashed from raw on-disk bytes.
+        assert isinstance(data, str)
+        return data
+    if kind == "file":
+        assert isinstance(data, bytes)
+        return sha256_bytes(data)
+    assert kind == "link" and isinstance(data, str)
+    return sha256_bytes(b"symlink\x00" + data.encode("utf-8", "surrogateescape"))
 
 
 def compare_inventories(

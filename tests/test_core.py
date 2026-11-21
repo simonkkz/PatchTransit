@@ -257,6 +257,15 @@ class MoreEdgeCases(unittest.TestCase):
 
         _safe_target(Path("foo/bar"), "../file.txt")
 
+    def test_file_digest_is_raw_sha256(self):
+        import hashlib
+
+        from patchtransit.core import _digest
+
+        expected = hashlib.sha256(b"hello\n").hexdigest()
+        self.assertEqual(expected, _digest(("file", b"hello\n")))
+        self.assertEqual(expected, _digest(("filehash", expected)))
+
     def test_large_file_inventory_is_bounded(self):
         from patchtransit.core import MAX_DIFF_TEXT_BYTES
 

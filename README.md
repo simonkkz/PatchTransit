@@ -2,6 +2,10 @@
 
 **See what changed between two revisions of a patch — in the resulting code, not just in the patch text.**
 
+![PatchTransit HTML report](docs/preview.png)
+
+*Example of the standalone evidence report generated locally from a demo repository.*
+
 A 40-file diff gets updated after review. Did it fix the race, change a test, or accidentally delete part of the API? Comparing the two `.patch` files as text is noisy: hunks shift, context moves, line numbers change. PatchTransit applies **both** revisions to separate copies of the **same Git base tree**, then compares the files that actually result.
 
 ```text
