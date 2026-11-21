@@ -11,14 +11,15 @@ import hashlib
 import os
 import pathlib
 import re
-import shutil
 import subprocess
-import tarfile
 import tempfile
 import time
+from collections.abc import Iterator
 from typing import IO, Any
 
 MAX_ARCHIVE_BYTES = 2 * 1024**3
+MAX_SYMLINK_BYTES = 4096
+MAX_TREE_ENTRY_BYTES = 16384
 MAX_FILE_BYTES = 512 * 1024**2
 MAX_DIFF_TEXT_BYTES = 2 * 1024**2
 MAX_DIFF_LINES = 16000
@@ -117,15 +118,15 @@ def _member_path(name: str) -> pathlib.PurePosixPath:
         or not _portable_name(name)
         or any(part.casefold() == ".git" for part in item.parts)
     ):
-        raise PatchTransitError(f"Unsafe path in Git archive: {name!r}")
+        raise PatchTransitError(f"Unsafe path in Git tree: {name!r}")
     return item
 
 
 def _safe_target(parent: pathlib.PurePosixPath, linkname: str) -> None:
     if not _portable_name(linkname):
-        raise PatchTransitError(f"Archive symlink has unsafe target: {linkname!r}")
+        raise PatchTransitError(f"Git symlink has unsafe target: {linkname!r}")
     if pathlib.PurePosixPath(linkname).is_absolute():
-        raise PatchTransitError(f"Archive symlink has absolute target: {linkname!r}")
+        raise PatchTransitError(f"Git symlink has absolute target: {linkname!r}")
     depth = 0
     for component in (*parent.parts, *pathlib.PurePosixPath(linkname).parts):
         if component == "..":
@@ -133,68 +134,120 @@ def _safe_target(parent: pathlib.PurePosixPath, linkname: str) -> None:
         elif component not in ("", "."):
             depth += 1
         if depth < 0:
-            raise PatchTransitError(f"Archive symlink escapes checkout: {linkname!r}")
+            raise PatchTransitError(f"Git symlink escapes checkout: {linkname!r}")
+
+
+def _nul_records(stream: IO[bytes]) -> Iterator[bytes]:
+    pending = bytearray()
+    while block := stream.read(8192):
+        pending.extend(block)
+        while (separator := pending.find(0)) >= 0:
+            yield bytes(pending[:separator])
+            del pending[: separator + 1]
+        if len(pending) > MAX_TREE_ENTRY_BYTES:
+            raise PatchTransitError("Git tree has an oversized path entry")
+    if pending:
+        raise PatchTransitError("Truncated Git tree listing")
 
 
 def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
-    """Read an immutable Git tree into a bounded, non-privileged temporary directory."""
-    proc = subprocess.Popen(
-        ["git", "archive", "--format=tar", tree],
+    """Copy exact tracked Git blobs into a bounded temporary candidate tree."""
+    tree_proc = subprocess.Popen(
+        ["git", "ls-tree", "-r", "-z", "--full-tree", tree],
         cwd=repo,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+    proc = subprocess.Popen(
+        ["git", "cat-file", "--batch"],
+        cwd=repo,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert tree_proc.stdout is not None
+    assert proc.stdin is not None and proc.stdout is not None
     total = 0
     links: list[tuple[pathlib.Path, str]] = []
-    assert proc.stdout is not None
     try:
-        with tarfile.open(fileobj=proc.stdout, mode="r|") as archive:
-            for member in archive:
-                item = _member_path(member.name)
-                destination = target.joinpath(*item.parts)
-                if member.isdir():
-                    destination.mkdir(parents=True, exist_ok=True)
-                    continue
-                if member.issym():
-                    _safe_target(item.parent, member.linkname)
-                    links.append((destination, member.linkname))
-                    continue
-                if not member.isfile():
-                    raise PatchTransitError(
-                        f"Unsupported Git archive entry: {member.name}"
-                    )
-                total += member.size
-                if member.size > MAX_FILE_BYTES or total > MAX_ARCHIVE_BYTES:
-                    raise PatchTransitError(
-                        "Git tree exceeds default safety size limit"
-                    )
+        for record in _nul_records(tree_proc.stdout):
+            if not record:
+                continue
+            heading, separator, path = record.partition(b"\t")
+            parts = heading.split(b" ")
+            if not separator or len(parts) != 3:
+                raise PatchTransitError("Invalid Git tree entry")
+            mode_bytes, kind, oid = parts
+            item = _member_path(os.fsdecode(path))
+            if mode_bytes == b"160000" and kind == b"commit":
+                raise PatchTransitError(f"Git submodules are unsupported: {item}")
+            if mode_bytes not in (b"100644", b"100755", b"120000") or kind != b"blob":
+                raise PatchTransitError(f"Unsupported Git tree entry: {item}")
+            if not re.fullmatch(rb"[0-9a-fA-F]{40,64}", oid):
+                raise PatchTransitError(f"Invalid Git blob ID: {item}")
+            mode = mode_bytes.decode("ascii")
+            proc.stdin.write(oid + b"\n")
+            proc.stdin.flush()
+            header = proc.stdout.readline().rstrip(b"\n")
+            parts = header.split(b" ")
+            if len(parts) != 3 or parts[0] != oid or parts[1] != b"blob":
+                raise PatchTransitError(f"Cannot read Git blob: {item}")
+            try:
+                size = int(parts[2])
+            except ValueError as exc:
+                raise PatchTransitError(f"Invalid Git blob size: {item}") from exc
+            total += size
+            if size < 0 or size > MAX_FILE_BYTES or total > MAX_ARCHIVE_BYTES:
+                raise PatchTransitError("Git tree exceeds default safety size limit")
+            destination = target.joinpath(*item.parts)
+            if mode == "120000":
+                if size > MAX_SYMLINK_BYTES:
+                    raise PatchTransitError(f"Git symlink target is too long: {item}")
+                link_data = proc.stdout.read(size)
+                if len(link_data) != size:
+                    raise PatchTransitError(f"Truncated Git symlink blob: {item}")
+                linkname = os.fsdecode(link_data)
+                _safe_target(item.parent, linkname)
+                links.append((destination, linkname))
+            else:
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                source = archive.extractfile(member)
-                if source is None:
-                    raise PatchTransitError(f"Unable to extract {member.name}")
-                with source, destination.open("wb") as output:
-                    shutil.copyfileobj(source, output, length=1024 * 1024)
-                destination.chmod(0o755 if member.mode & 0o111 else 0o644)
-        proc.stdout.close()
+                with destination.open("xb") as output:
+                    remaining = size
+                    while remaining:
+                        chunk = proc.stdout.read(min(1024 * 1024, remaining))
+                        if not chunk:
+                            raise PatchTransitError(f"Truncated Git blob: {item}")
+                        output.write(chunk)
+                        remaining -= len(chunk)
+                destination.chmod(0o755 if mode == "100755" else 0o644)
+            if proc.stdout.read(1) != b"\n":
+                raise PatchTransitError(f"Invalid Git blob framing: {item}")
+        if tree_proc.wait(timeout=10):
+            message = (
+                tree_proc.stderr.read(2000).decode("utf-8", "replace")
+                if tree_proc.stderr
+                else ""
+            )
+            raise PatchTransitError(f"git ls-tree failed: {message}")
+        proc.stdin.close()
         error = proc.stderr.read(2000).decode("utf-8", "replace") if proc.stderr else ""
         if proc.wait(timeout=10):
-            raise PatchTransitError(f"git archive failed: {error}")
-        # Create only *internal* relative symlinks, after all regular files.
+            raise PatchTransitError(f"git cat-file failed: {error}")
         for destination, linkname in links:
             destination.parent.mkdir(parents=True, exist_ok=True)
             if destination.exists() or destination.is_symlink():
                 raise PatchTransitError(
-                    f"Archive has duplicate target: {destination.name}"
+                    f"Git tree has duplicate target: {destination.name}"
                 )
             destination.symlink_to(linkname)
     finally:
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait()
-        if proc.stdout:
-            proc.stdout.close()
-        if proc.stderr:
-            proc.stderr.close()
+        for process in (tree_proc, proc):
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+            for pipe in (process.stdin, process.stdout, process.stderr):
+                if pipe and not pipe.closed:
+                    pipe.close()
 
 
 def _path_safe(filename: str) -> bool:
