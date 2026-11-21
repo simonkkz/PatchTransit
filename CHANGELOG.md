@@ -3,6 +3,7 @@
 ## 0.1.1 — maintenance and quality checks
 
 - Validate symlinks introduced by patch application, not only those present in the base Git tree, before running optional commands.
+- Reject colliding report destinations and paths that would overwrite input patch files before producing outputs.
 - Snapshot patch inputs before inspection and application to keep SHA-256 evidence consistent even if source patch files change during an evaluation. Stream patch metadata instead of buffering entire patch inputs.
 - Distinguish check errors and timeouts from ordinary exit codes in human-readable CLI and HTML evidence; display output hashes in HTML.
 - Export candidate trees directly from committed Git blobs rather than `git archive`, preserving tracked paths marked `export-ignore`. Reject unsupported Git submodule links explicitly.

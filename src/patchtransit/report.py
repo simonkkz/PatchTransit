@@ -11,9 +11,14 @@ import tempfile
 from typing import Any
 
 
+def resolve_output_path(path: pathlib.Path) -> pathlib.Path:
+    """Resolve the parent, not the final symlink that atomic write replaces."""
+    expanded = path.expanduser()
+    return expanded.parent.resolve() / expanded.name
+
+
 def atomic_write(path: pathlib.Path, contents: str) -> None:
-    path = path.expanduser()
-    path = path.parent.resolve() / path.name
+    path = resolve_output_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
