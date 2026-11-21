@@ -1,22 +1,15 @@
-## Problem and change
+## What changed?
 
-<!-- What failed or needed improvement? What does this PR change? Link related issues. -->
+<!-- Link the issue and briefly explain the fix or feature. -->
 
-## Validation
+## Testing
 
-- [ ] Added or updated focused regression tests (or explained why not applicable).
-- [ ] `python -m unittest discover -s tests -v`
-- [ ] `python -m ruff check src tests`
-- [ ] `python -m ruff format --check src tests`
-- [ ] `python -m pyrefly check`
-- [ ] Considered Linux, macOS and Windows behavior; CI checks reviewed.
+- [ ] Tests added or updated where needed
+- [ ] Unit tests pass
+- [ ] Ruff lint and format checks pass
+- [ ] Pyrefly checks pass
+- [ ] CI matrix reviewed (Linux, macOS, Windows)
 
-## Safety and compatibility
+## Notes
 
-- [ ] Does not mutate the original repository/index/refs during comparison.
-- [ ] Does not introduce implicit network calls, shell execution or new runtime dependencies.
-- [ ] Handles untrusted paths/content and documents relevant resource limits.
-- [ ] Documents any user-facing behavior or evidence schema changes.
-- [ ] Contains no secrets, personal data, private patches or generated artifacts.
-
-<!-- If a checkbox is not relevant, leave it unchecked and explain briefly. -->
+<!-- Any compatibility, security or documentation implications? -->
