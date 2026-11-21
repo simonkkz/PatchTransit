@@ -315,7 +315,7 @@ def patch_metadata(filename: pathlib.Path | None) -> dict[str, Any]:
         "files": touched,
         "added_lines": added,
         "removed_lines": removed,
-        "hunks": sum(1 for line in data.splitlines() if line.startswith(b"@@ ")),
+        "hunks": sum(1 for line in data.split(b"\n") if line.startswith(b"@@ ")),
     }
 
 
