@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a focused improvement to PatchTransit's comparison or evidence workflow.
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or limitation
+      description: Explain the scenario that current functionality does not address.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe expected inputs, outputs and user-visible behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and trade-offs
+      description: Include compatibility, performance, safety and complexity considerations.
+    validations:
+      required: false
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Design constraints
+      options:
+        - label: I considered offline execution, reproducibility and no new runtime dependencies.
+          required: true

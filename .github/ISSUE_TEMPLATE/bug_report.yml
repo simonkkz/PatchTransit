@@ -1,0 +1,62 @@
+name: Bug report
+description: Report an incorrect comparison, crash or unexpected behavior.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Please provide a **minimal, non-sensitive** reproduction. For security flaws, use private vulnerability reporting instead."
+  - type: input
+    id: version
+    attributes:
+      label: PatchTransit version
+      description: Run `patchtransit --version`, or provide a commit SHA.
+      placeholder: "0.1.1 / commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Minimal steps to reproduce
+      description: Include the base tree/ref, CLI command and harmless synthetic patch inputs if possible.
+      placeholder: "1. Initialize a small repository ...\n2. Run patchtransit compare ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include exit code and sanitized error or output snippets.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Remove credentials, personal information, private paths and proprietary code before posting.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and removed confidential information from this report.
+          required: true
