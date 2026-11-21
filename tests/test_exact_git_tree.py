@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import subprocess
 import sys
@@ -10,7 +11,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from patchtransit.core import PatchTransitError, evaluate, export_tree, repository
+from patchtransit.core import (
+    PatchTransitError,
+    _nul_records,
+    evaluate,
+    export_tree,
+    repository,
+)
 
 
 class ExactGitTree(unittest.TestCase):
@@ -116,6 +123,92 @@ class ExactGitTree(unittest.TestCase):
             PatchTransitError, "Git submodules are unsupported"
         ):
             self.exported()
+
+    @unittest.skipIf(sys.platform == "win32", "Git file URL paths differ on Windows")
+    def test_partial_clone_missing_blobs_do_not_trigger_lazy_fetch(self):
+        (self.repo / "data.txt").write_bytes(b"partial clone content" * 1024)
+        self.git("config", "uploadpack.allowFilter", "true")
+        self.commit()
+        clone = self.root / "partial"
+        result = subprocess.run(
+            (
+                "git",
+                "clone",
+                "-q",
+                "--filter=blob:none",
+                "--no-checkout",
+                self.repo.as_uri(),
+                str(clone),
+            ),
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode:
+            self.skipTest("Local Git partial cloning is unavailable")
+        oid = (
+            subprocess.run(
+                ("git", "rev-parse", "HEAD:data.txt"),
+                cwd=clone,
+                capture_output=True,
+                check=True,
+            )
+            .stdout.decode()
+            .strip()
+        )
+        exists = subprocess.run(
+            ("git", "cat-file", "-e", oid),
+            cwd=clone,
+            env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
+            capture_output=True,
+            check=False,
+        )
+        if exists.returncode == 0:
+            self.skipTest("Clone server returned blobs despite the filter")
+        repo, tree = repository(clone, "HEAD")
+        exported = self.root / "partial-export"
+        exported.mkdir()
+        with self.assertRaisesRegex(PatchTransitError, "Cannot read Git blob"):
+            export_tree(repo, tree, exported)
+        self.assertFalse((exported / "data.txt").exists())
+
+    def test_sha256_object_format_repository(self):
+        sha256_repo = self.root / "sha256-repo"
+        sha256_repo.mkdir()
+        init = subprocess.run(
+            ("git", "init", "-q", "--object-format=sha256"),
+            cwd=sha256_repo,
+            capture_output=True,
+            check=False,
+        )
+        if init.returncode:
+            self.skipTest("Git SHA-256 repository format is unavailable")
+        for args in (
+            ("git", "config", "user.name", "Fixture"),
+            ("git", "config", "user.email", "fixture@example.invalid"),
+        ):
+            subprocess.run(args, cwd=sha256_repo, capture_output=True, check=True)
+        (sha256_repo / "data.txt").write_bytes(b"sha256 repository\n")
+        subprocess.run(("git", "add", "."), cwd=sha256_repo, check=True)
+        subprocess.run(("git", "commit", "-qm", "base"), cwd=sha256_repo, check=True)
+        resolved, tree = repository(sha256_repo, "HEAD")
+        self.assertEqual(64, len(tree))
+        destination = self.root / "sha256-export"
+        destination.mkdir()
+        export_tree(resolved, tree, destination)
+        self.assertEqual(
+            b"sha256 repository\n", (destination / "data.txt").read_bytes()
+        )
+
+    def test_git_tree_listing_frames_and_entry_limit(self):
+        data = io.BytesIO(b"first\0second\0")
+        self.assertEqual([b"first", b"second"], list(_nul_records(data)))
+        with (
+            patch("patchtransit.core.MAX_TREE_ENTRY_BYTES", 5),
+            self.assertRaisesRegex(PatchTransitError, "oversized"),
+        ):
+            list(_nul_records(io.BytesIO(b"123456\0")))
+        with self.assertRaisesRegex(PatchTransitError, "Truncated Git tree"):
+            list(_nul_records(io.BytesIO(b"missing terminator")))
 
     def test_export_rejects_overlarge_file(self):
         (self.repo / "file.txt").write_bytes(b"x" * 128)
