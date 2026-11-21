@@ -63,6 +63,40 @@ class NonUtf8GitPaths(unittest.TestCase):
             self.assertNotIn("\udcff", html_text)
             self.assertIn("Effective diff", html_file.read_text())
 
+    def test_binary_fallback_quotes_non_utf8_path_in_effective_diff(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            root.mkdir()
+
+            def git(*args: str) -> bytes:
+                return subprocess.run(
+                    ("git", *args), cwd=root, check=True, capture_output=True
+                ).stdout
+
+            for args in (
+                ("init", "-q"),
+                ("config", "user.name", "Fixture"),
+                ("config", "user.email", "fixture@example.invalid"),
+            ):
+                git(*args)
+            raw_name = b"binary-\xfe.bin"
+            original = os.fsencode(root) + b"/" + raw_name
+            with open(original, "wb") as output:
+                output.write(b"\x00old\n")
+            git("add", ".")
+            git("commit", "-qm", "base")
+            with open(original, "wb") as output:
+                output.write(b"\x00new\n")
+            patch = Path(temp) / "change.patch"
+            patch.write_bytes(git("diff", "--binary"))
+            result = evaluate(root, "HEAD", None, patch)
+            preview = result["effective_diff"]
+            self.assertIn(r"binary-\376.bin", preview)
+            self.assertNotIn("\udcfe", preview)
+            output_path = Path(temp) / "effective.patch"
+            atomic_write(output_path, preview)
+            self.assertIn(r"binary-\376.bin", output_path.read_text())
+
     def test_normal_unicode_remains_unescaped_in_readable_json(self):
         text = json_report({"name": "café ☃"})
         self.assertIn("café ☃", text)
