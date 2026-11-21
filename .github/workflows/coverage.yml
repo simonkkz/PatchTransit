@@ -13,7 +13,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
@@ -25,7 +25,7 @@ jobs:
           python -m coverage xml -o coverage.xml
           python -m coverage report -m
       - name: Preserve report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: coverage-xml
           path: coverage.xml
