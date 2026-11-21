@@ -34,7 +34,7 @@ class DiffRoundtrip(unittest.TestCase):
                     {"sample.txt": ("file", after)},
                 )
                 applied = subprocess.run(
-                    ["git", "apply", "-"],
+                    ["git", "-c", "core.autocrlf=false", "apply", "-"],
                     cwd=root,
                     input=preview.encode(),
                     capture_output=True,
