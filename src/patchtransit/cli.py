@@ -7,6 +7,7 @@ import pathlib
 import shlex
 import sys
 
+from . import __version__
 from .core import PatchTransitError, evaluate, patch_metadata
 from .report import atomic_write, html_report, json_report
 
@@ -16,7 +17,7 @@ def parser() -> argparse.ArgumentParser:
         prog="patchtransit",
         description="Compare the actual effects of two patch revisions.",
     )
-    p.add_argument("--version", action="version", version="PatchTransit 0.1.0")
+    p.add_argument("--version", action="version", version=f"PatchTransit {__version__}")
     sub = p.add_subparsers(dest="action", required=True)
     for name in ("inspect", "compare", "verify"):
         c = sub.add_parser(

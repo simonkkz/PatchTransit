@@ -23,6 +23,7 @@ MAX_ARCHIVE_BYTES = 2 * 1024**3
 MAX_FILE_BYTES = 512 * 1024**2
 MAX_DIFF_TEXT_BYTES = 2 * 1024**2
 MAX_DIFF_LINES = 16000
+MAX_DIFF_OUTPUT_BYTES = 8 * 1024**2
 
 
 class PatchTransitError(Exception):
@@ -290,11 +291,37 @@ def _digest(value: tuple[str, bytes | str] | None) -> str | None:
     return sha256_bytes(b"symlink\x00" + data.encode("utf-8", "surrogateescape"))
 
 
+def _lf_lines(text: str) -> list[str]:
+    """Split on LF only; str.splitlines() also splits valid text at VT/FF/NEL."""
+    parts = text.split("\n")
+    lines = [part + "\n" for part in parts[:-1]]
+    if parts[-1]:
+        lines.append(parts[-1])
+    return lines
+
+
 def compare_inventories(
     left: dict[str, tuple[str, bytes | str]], right: dict[str, tuple[str, bytes | str]]
 ) -> tuple[list[dict[str, Any]], str]:
     changes: list[dict[str, Any]] = []
     diff_lines: list[str] = []
+    rendered_bytes = 0
+    truncated = False
+
+    def append_diff(line: str) -> None:
+        nonlocal rendered_bytes, truncated
+        if truncated:
+            return
+        size = len(line.encode("utf-8", "surrogateescape"))
+        if (
+            len(diff_lines) >= MAX_DIFF_LINES
+            or rendered_bytes + size > MAX_DIFF_OUTPUT_BYTES
+        ):
+            truncated = True
+            return
+        diff_lines.append(line)
+        rendered_bytes += size
+
     for filename in sorted(left.keys() | right.keys()):
         a = left.get(filename)
         b = right.get(filename)
@@ -315,6 +342,9 @@ def compare_inventories(
                 else None,
             }
         )
+        # The text preview is bounded, but the JSON evidence must be exhaustive.
+        if truncated:
+            continue
         if (
             a
             and b
@@ -324,51 +354,55 @@ def compare_inventories(
         ):
             old_mode = "100755" if a[0].endswith("+x") else "100644"
             new_mode = "100755" if b[0].endswith("+x") else "100644"
-            diff_lines.extend(
-                [
-                    f"diff --git a/{filename} b/{filename}\n",
-                    f"old mode {old_mode}\n",
-                    f"new mode {new_mode}\n",
-                ]
-            )
-        aa = a[1] if a and a[0] in ("file", "file+x") else None
-        bb = b[1] if b and b[0] in ("file", "file+x") else None
-        if aa is not None and not isinstance(aa, bytes):
-            aa = None
-        if bb is not None and not isinstance(bb, bytes):
-            bb = None
-        if aa is None and bb is None:
-            diff_lines.append(
-                f"--- {filename}: binary/large file, symlink or metadata changed (hashes in JSON)\n"
+            for line in (
+                f"diff --git a/{filename} b/{filename}\n",
+                f"old mode {old_mode}\n",
+                f"new mode {new_mode}\n",
+            ):
+                append_diff(line)
+        if truncated:
+            continue
+        # A large file is represented by its hash. Never pretend a size or
+        # kind transition is an addition/deletion from an *empty* text file.
+        if (a and a[0] not in ("file", "file+x")) or (
+            b and b[0] not in ("file", "file+x")
+        ):
+            append_diff(
+                f"--- {filename}: binary/large file, symlink or metadata "
+                "changed (hashes in JSON)\n"
             )
             continue
+        aa = a[1] if a else b""
+        bb = b[1] if b else b""
+        assert isinstance(aa, bytes) and isinstance(bb, bytes)
         if (
-            aa is not None
-            and (len(aa) > MAX_DIFF_TEXT_BYTES or b"\x00" in aa)
-            or bb is not None
-            and (len(bb) > MAX_DIFF_TEXT_BYTES or b"\x00" in bb)
+            len(aa) > MAX_DIFF_TEXT_BYTES
+            or len(bb) > MAX_DIFF_TEXT_BYTES
+            or b"\x00" in aa
+            or b"\x00" in bb
         ):
-            diff_lines.append(
+            append_diff(
                 f"--- {filename}: binary/large contents differ (hashes in JSON)\n"
             )
             continue
         try:
-            a_lines = (aa or b"").decode("utf-8").splitlines(keepends=True)
-            b_lines = (bb or b"").decode("utf-8").splitlines(keepends=True)
+            a_lines = _lf_lines(aa.decode("utf-8"))
+            b_lines = _lf_lines(bb.decode("utf-8"))
         except UnicodeDecodeError:
-            diff_lines.append(
-                f"--- {filename}: non-UTF-8 contents differ (hashes in JSON)\n"
-            )
+            append_diff(f"--- {filename}: non-UTF-8 contents differ (hashes in JSON)\n")
             continue
         for line in difflib.unified_diff(
             a_lines, b_lines, fromfile=f"old/{filename}", tofile=f"new/{filename}", n=3
         ):
-            diff_lines.append(line if line.endswith("\n") else line + "\n")
-            if len(diff_lines) >= MAX_DIFF_LINES:
-                diff_lines.append(
-                    "\n... diff truncated; JSON manifest remains complete ...\n"
-                )
-                return changes, "".join(diff_lines)
+            append_diff(line if line.endswith("\n") else line + "\n")
+            # difflib omits the EOF marker; without it, the diff can falsely
+            # add trailing newlines and even fail to apply to the old file.
+            if not line.endswith("\n") and not truncated:
+                append_diff("\\ No newline at end of file\n")
+            if truncated:
+                break
+    if truncated:
+        diff_lines.append("\n... diff truncated; JSON manifest remains complete ...\n")
     return changes, "".join(diff_lines)
 
 

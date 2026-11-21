@@ -361,3 +361,69 @@ class MoreEdgeCases(unittest.TestCase):
             self.assertFalse(_path_safe(p))
         for p in ("src/example.py", "docs/my space.txt", "src/á.py"):
             self.assertTrue(_path_safe(p))
+
+    def test_manifest_remains_complete_after_diff_line_limit(self):
+        from unittest.mock import patch
+
+        right = {f"file{i}.txt": ("file", f"value {i}\n".encode()) for i in range(12)}
+        with patch("patchtransit.core.MAX_DIFF_LINES", 3):
+            changes, text = compare_inventories({}, right)
+        self.assertEqual(12, len(changes))
+        self.assertEqual(12, len({item["path"] for item in changes}))
+        self.assertEqual("added", changes[-1]["change"])
+        self.assertEqual(64, len(changes[-1]["after_sha256"]))
+        self.assertIn("diff truncated; JSON manifest remains complete", text)
+
+    def test_binary_changes_obey_line_limit_without_losing_manifest(self):
+        from unittest.mock import patch
+
+        left = {f"link{i}": ("link", "before") for i in range(12)}
+        right = {f"link{i}": ("link", "after") for i in range(12)}
+        with patch("patchtransit.core.MAX_DIFF_LINES", 2):
+            changes, text = compare_inventories(left, right)
+        self.assertEqual(12, len(changes))
+        self.assertEqual(2, text.count("hashes in JSON"))
+        self.assertIn("diff truncated", text)
+
+    def test_diff_byte_limit_does_not_truncate_manifest(self):
+        from unittest.mock import patch
+
+        right = {f"file{i}.txt": ("file", b"data\n") for i in range(10)}
+        with patch("patchtransit.core.MAX_DIFF_OUTPUT_BYTES", 75):
+            changes, text = compare_inventories({}, right)
+        self.assertEqual(10, len(changes))
+        self.assertIn("diff truncated", text)
+        self.assertLessEqual(len(text.split("... diff truncated")[0].encode()), 75)
+
+    def test_large_file_becoming_small_does_not_fake_text_addition(self):
+        changes, text = compare_inventories(
+            {"data.txt": ("filehash", "a" * 64)},
+            {"data.txt": ("file", b"new\n")},
+        )
+        self.assertEqual(1, len(changes))
+        self.assertEqual("modified", changes[0]["change"])
+        self.assertEqual("a" * 64, changes[0]["before_sha256"])
+        self.assertIn("hashes in JSON", text)
+        self.assertNotIn("+new", text)
+
+    def test_symlink_to_text_does_not_fake_text_addition(self):
+        changes, text = compare_inventories(
+            {"data.txt": ("link", "target.txt")},
+            {"data.txt": ("file", b"contents\n")},
+        )
+        self.assertEqual("modified", changes[0]["change"])
+        self.assertIn("symlink", text)
+        self.assertNotIn("+contents", text)
+
+    def test_cli_version_tracks_package_version(self):
+        import contextlib
+        import io
+
+        from patchtransit import __version__
+        from patchtransit.cli import parser
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as exit:
+            parser().parse_args(["--version"])
+        self.assertEqual(0, exit.exception.code)
+        self.assertEqual(f"PatchTransit {__version__}\n", output.getvalue())

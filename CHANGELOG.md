@@ -7,6 +7,9 @@
 - Expand the CI matrix to Python 3.14 and 3.15, for 15 OS/interpreter combinations.
 - Correctly include file kind and mode in whole-tree state fingerprints.
 - Add end-to-end fixtures for binary patch revisions and Unicode filenames.
+- Keep the complete changed-file manifest even when the readable diff preview reaches its line/size limits.
+- Avoid misleading text diffs when a file transitions from a large/symlink state to ordinary text.
+- Align the CLI version string with the package version.
 
 ## 0.1.0 — initial development snapshot
 
