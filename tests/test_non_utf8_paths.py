@@ -14,7 +14,10 @@ from patchtransit.core import evaluate
 from patchtransit.report import atomic_write, html_report, json_report
 
 
-@unittest.skipIf(sys.platform == "win32", "Test requires raw-byte POSIX filenames")
+@unittest.skipUnless(
+    sys.platform.startswith("linux"),
+    "Filesystem must support malformed UTF-8 filenames",
+)
 class NonUtf8GitPaths(unittest.TestCase):
     def test_non_utf8_path_roundtrips_in_json_and_displays_in_html(self):
         with tempfile.TemporaryDirectory() as temp:
