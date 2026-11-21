@@ -477,7 +477,7 @@ def compare_inventories(
             b and b[0] not in ("file", "file+x")
         ):
             append_diff(
-                f"--- {filename}: binary/large file, symlink or metadata "
+                f"--- {_git_path(filename)}: binary/large file, symlink or metadata "
                 "changed (hashes in JSON)\n"
             )
             continue
@@ -491,14 +491,16 @@ def compare_inventories(
             or b"\x00" in bb
         ):
             append_diff(
-                f"--- {filename}: binary/large contents differ (hashes in JSON)\n"
+                f"--- {_git_path(filename)}: binary/large contents differ (hashes in JSON)\n"
             )
             continue
         try:
             a_lines = _lf_lines(aa.decode("utf-8"))
             b_lines = _lf_lines(bb.decode("utf-8"))
         except UnicodeDecodeError:
-            append_diff(f"--- {filename}: non-UTF-8 contents differ (hashes in JSON)\n")
+            append_diff(
+                f"--- {_git_path(filename)}: non-UTF-8 contents differ (hashes in JSON)\n"
+            )
             continue
         if a is None or b is None:
             append_diff(
