@@ -10,7 +10,7 @@ from typing import Any
 
 from . import __version__
 from .core import PatchTransitError, evaluate, patch_metadata
-from .report import atomic_write, html_report, json_report
+from .report import atomic_write, html_report, json_report, resolve_output_path
 
 
 def parser() -> argparse.ArgumentParser:
@@ -85,9 +85,32 @@ def _check_status(check: dict[str, Any]) -> str:
     return str(code) if code is not None else "unknown"
 
 
+def _validate_outputs(args: argparse.Namespace) -> None:
+    sources = (args.old, args.new) if args.action == "compare" else (args.patch,)
+    source_paths = {
+        target
+        for source in sources
+        for target in (source.expanduser().resolve(), resolve_output_path(source))
+    }
+    seen: dict[pathlib.Path, str] = {}
+    for flag in ("json", "html", "diff"):
+        output = getattr(args, flag, None)
+        if output is None:
+            continue
+        destination = resolve_output_path(output)
+        if destination in source_paths:
+            raise PatchTransitError(f"--{flag} would overwrite an input patch")
+        if previous := seen.get(destination):
+            raise PatchTransitError(
+                f"--{flag} and --{previous} have the same output path"
+            )
+        seen[destination] = flag
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
+        _validate_outputs(args)
         if args.action == "inspect":
             result = patch_metadata(args.patch.resolve())
             if args.json:
