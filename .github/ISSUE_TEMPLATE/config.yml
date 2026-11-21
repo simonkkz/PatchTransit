@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private security vulnerability report
+    url: https://github.com/simonkkz/PatchTransit/security/policy
+    about: Report security flaws privately; never include exploit steps or secrets in a public issue.
