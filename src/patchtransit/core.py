@@ -83,19 +83,43 @@ def repository(path: pathlib.Path, revision: str) -> tuple[pathlib.Path, str]:
     return root, tree
 
 
+_WINDOWS_DEVICE = re.compile(
+    r"^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$", re.IGNORECASE
+)
+
+
+def _portable_name(name: str) -> bool:
+    """Reject path spellings that can escape or alias paths on Windows."""
+    if not name or "\\" in name or ":" in name or "\x00" in name:
+        return False
+    for component in pathlib.PurePosixPath(name).parts:
+        if component in ("", ".", ".."):
+            continue
+        if (
+            component.casefold() == ".git"
+            or component.endswith((" ", "."))
+            or _WINDOWS_DEVICE.fullmatch(component)
+        ):
+            return False
+    return True
+
+
 def _member_path(name: str) -> pathlib.PurePosixPath:
     item = pathlib.PurePosixPath(name)
     if (
         item.is_absolute()
         or not item.parts
         or ".." in item.parts
-        or ".git" in item.parts
+        or not _portable_name(name)
+        or any(part.casefold() == ".git" for part in item.parts)
     ):
         raise PatchTransitError(f"Unsafe path in Git archive: {name!r}")
     return item
 
 
 def _safe_target(parent: pathlib.PurePosixPath, linkname: str) -> None:
+    if not _portable_name(linkname):
+        raise PatchTransitError(f"Archive symlink has unsafe target: {linkname!r}")
     if pathlib.PurePosixPath(linkname).is_absolute():
         raise PatchTransitError(f"Archive symlink has absolute target: {linkname!r}")
     depth = 0
@@ -170,11 +194,13 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
 
 
 def _path_safe(filename: str) -> bool:
-    if not filename or "\x00" in filename or "\\" in filename:
+    if not _portable_name(filename):
         return False
     path = pathlib.PurePosixPath(filename)
     return (
-        not path.is_absolute() and ".." not in path.parts and ".git" not in path.parts
+        not path.is_absolute()
+        and ".." not in path.parts
+        and not any(part.casefold() == ".git" for part in path.parts)
     )
 
 
