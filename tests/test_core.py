@@ -54,6 +54,38 @@ class Project(unittest.TestCase):
     def report(self, **kwargs):
         return evaluate(self.repo, "HEAD", self.old, self.new, **kwargs)
 
+    def test_binary_patch_revisions(self):
+        binary = self.repo / "payload.bin"
+        binary.write_bytes(b"\x00\x01\x02\x03\x04")
+        cmd("git", "add", "payload.bin", cwd=self.repo)
+        cmd("git", "commit", "-qm", "add binary fixture", cwd=self.repo)
+        binary.write_bytes(b"\x00\x07\x02\x03\x04")
+        self.old.write_bytes(cmd("git", "diff", "--binary", cwd=self.repo).stdout)
+        binary.write_bytes(b"\x00\x08\x02\x03\x04")
+        self.new.write_bytes(cmd("git", "diff", "--binary", cwd=self.repo).stdout)
+        binary.write_bytes(b"\x00\x01\x02\x03\x04")
+        result = self.report()
+        self.assertEqual(["payload.bin"], [c["path"] for c in result["changes"]])
+        self.assertIn("binary", result["effective_diff"])
+        self.assertNotEqual(
+            result["changes"][0]["before_sha256"], result["changes"][0]["after_sha256"]
+        )
+
+    def test_filename_with_spaces_and_unicode(self):
+        filename = "demo café notes.txt"
+        special = self.repo / filename
+        special.write_text("v1\n")
+        cmd("git", "add", filename, cwd=self.repo)
+        cmd("git", "commit", "-qm", "add unicode filename", cwd=self.repo)
+        special.write_text("v2\n")
+        self.old.write_bytes(cmd("git", "diff", "--binary", cwd=self.repo).stdout)
+        special.write_text("v3\n")
+        self.new.write_bytes(cmd("git", "diff", "--binary", cwd=self.repo).stdout)
+        special.write_text("v1\n")
+        result = self.report()
+        self.assertEqual([filename], [c["path"] for c in result["changes"]])
+        self.assertIn("+v3", result["effective_diff"])
+
     def test_patch_counts(self):
         self.assertEqual(1, len(patch_metadata(self.old)["files"]))
         self.assertEqual(1, patch_metadata(self.new)["hunks"])
