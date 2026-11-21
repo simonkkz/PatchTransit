@@ -363,7 +363,9 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
             path = pathlib.Path(current) / name
             rel = path.relative_to(root).as_posix()
             if path.is_symlink():
-                items[rel] = ("link", os.readlink(path))
+                target = os.readlink(path)
+                _safe_target(pathlib.PurePosixPath(rel).parent, target)
+                items[rel] = ("link", target)
             elif path.is_file():
                 # Store digests instead of loading huge binary assets into RAM.
                 # Ordinary source remains in-memory for readable unified diffs.

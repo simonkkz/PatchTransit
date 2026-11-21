@@ -17,7 +17,7 @@ PatchTransit is a local developer utility, not a containment boundary. Treat rep
 - Reports include diff content and paths. They are not automatically sanitized and are not safe to post without review.
 - Git is a required external executable. The repository's Git configuration can influence Git operations; use a trusted environment.
 - A crafted Git repository may exceed configured resource limits; tree-entry, file and total-size limits prevent some but not all resource-exhaustion cases.
-- Git tree paths, symlink targets and patch paths reject Windows drive/UNC spellings, reserved device names, alternate streams and trailing-space/dot aliases, even when run on a POSIX host.
+- Git tree paths, symlink targets and patch paths reject Windows drive/UNC spellings, reserved device names, alternate streams and trailing-space/dot aliases, even when run on a POSIX host. Symlinks created by patches are checked after application too; absolute and escaping targets are rejected before optional test execution.
 - Only Git patches that `git apply` understands and that pass preflight are accepted. Unrecognized metadata encodings are rejected, not guessed.
 
 ## Reporting vulnerabilities
