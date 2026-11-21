@@ -79,7 +79,7 @@ patchtransit inspect before.patch
 
 ## What is actually compared?
 
-The output is determined by the full file state after applying each patch, not by subtraction of patch text. Executable permission changes are represented as mode metadata on platforms that preserve POSIX file modes; mode-only changes may not be observable on Windows filesystems. For every changed file, the JSON records the path, change type and SHA-256 digest of both versions. Plain UTF-8 changes appear in the unified diff. Binary/large-file changes are recorded by their checksums rather than dumped into the report. The readable diff preview is capped at 16,000 lines or 8 MiB; when truncated, the JSON `changes` manifest still includes **every** changed file.
+The output is determined by the full file state after applying each patch, not by subtraction of patch text. Executable permission changes are represented as mode metadata on platforms that preserve POSIX file modes; mode-only changes may not be observable on Windows filesystems. For every changed file, the JSON records the path, change type and SHA-256 digest of both versions. Plain UTF-8 changes, including file additions and deletions, appear as Git-applicable unified diffs. Binary/large-file changes are represented by their checksums rather than complete patches. The readable diff preview is capped at 16,000 lines or 8 MiB; when truncated, the JSON `changes` manifest still includes **every** changed file.
 
 The **common base tree matters**. Patches based on different commits should be rebased onto a common base before comparing them. PatchTransit refuses to compare a revision that fails to apply cleanly.
 
