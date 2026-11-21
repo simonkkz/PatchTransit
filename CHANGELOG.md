@@ -2,6 +2,7 @@
 
 ## 0.1.1 — maintenance and quality checks
 
+- Snapshot patch inputs before inspection and application to keep SHA-256 evidence consistent even if source patch files change during an evaluation. Stream patch metadata instead of buffering entire patch inputs.
 - Export candidate trees directly from committed Git blobs rather than `git archive`, preserving tracked paths marked `export-ignore`. Reject unsupported Git submodule links explicitly.
 - Detect executable permission changes in resulting patch states on POSIX filesystems, including mode-only patches.
 - Add strict Pyrefly type checking and Renovate configuration for dev tools and Actions updates.

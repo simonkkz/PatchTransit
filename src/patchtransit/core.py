@@ -278,12 +278,28 @@ def patch_metadata(filename: pathlib.Path | None) -> dict[str, Any]:
             "removed_lines": 0,
             "hunks": 0,
         }
+    digest = hashlib.sha256()
+    size = hunks = 0
+    prefix = b""
     try:
-        data = filename.read_bytes()
+        with filename.open("rb") as source:
+            while block := source.read(64 * 1024):
+                size += len(block)
+                if size > MAX_ARCHIVE_BYTES:
+                    raise PatchTransitError("Patch exceeds maximum accepted size")
+                digest.update(block)
+                # A patch is LF-framed even when its contents contain bare CRs.
+                fragments = block.split(b"\n")
+                for line in fragments[:-1]:
+                    if (prefix + line[: 3 - len(prefix)]) == b"@@ ":
+                        hunks += 1
+                    prefix = b""
+                if len(prefix) < 3:
+                    prefix += fragments[-1][: 3 - len(prefix)]
+            if prefix == b"@@ ":
+                hunks += 1
     except OSError as exc:
         raise PatchTransitError(f"Cannot read patch {filename}: {exc}") from exc
-    if len(data) > MAX_ARCHIVE_BYTES:
-        raise PatchTransitError("Patch exceeds maximum accepted size")
     # Extract paths from git's -z output; no shell, no guesswork about quoting.
     stat = run(["git", "apply", "--numstat", "-z", str(filename)])
     if stat.returncode:
@@ -310,12 +326,12 @@ def patch_metadata(filename: pathlib.Path | None) -> dict[str, Any]:
         added += int(a) if a.isdigit() else 0
         removed += int(b) if b.isdigit() else 0
     return {
-        "sha256": sha256_bytes(data),
-        "bytes": len(data),
+        "sha256": digest.hexdigest(),
+        "bytes": size,
         "files": touched,
         "added_lines": added,
         "removed_lines": removed,
-        "hunks": sum(1 for line in data.split(b"\n") if line.startswith(b"@@ ")),
+        "hunks": hunks,
     }
 
 
@@ -616,6 +632,21 @@ def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> dict[str, An
         }
 
 
+def _snapshot_patch(source: pathlib.Path, destination: pathlib.Path) -> pathlib.Path:
+    """Freeze patch bytes before parsing or applying them to either candidate."""
+    try:
+        size = 0
+        with source.open("rb") as original, destination.open("xb") as snapshot:
+            while block := original.read(1024 * 1024):
+                size += len(block)
+                if size > MAX_ARCHIVE_BYTES:
+                    raise PatchTransitError("Patch exceeds maximum accepted size")
+                snapshot.write(block)
+    except OSError as exc:
+        raise PatchTransitError(f"Cannot copy patch {source}: {exc}") from exc
+    return destination
+
+
 def evaluate(
     repo_path: pathlib.Path,
     revision: str,
@@ -632,18 +663,24 @@ def evaluate(
         raise PatchTransitError(
             "Old and new patch are identical paths; pass different files"
         )
-    old = patch_metadata(old_patch)
-    new = patch_metadata(new_patch)
     with tempfile.TemporaryDirectory(prefix="patchtransit-") as sandbox:
         base = pathlib.Path(sandbox)
+        old_snapshot = (
+            _snapshot_patch(old_patch, base / "old.patch") if old_patch else None
+        )
+        new_snapshot = (
+            _snapshot_patch(new_patch, base / "new.patch") if new_patch else None
+        )
+        old = patch_metadata(old_snapshot)
+        new = patch_metadata(new_snapshot)
         left = base / "old"
         right = base / "new"
         left.mkdir()
         right.mkdir()
         export_tree(repo, tree, left)
         export_tree(repo, tree, right)
-        apply_patch(left, old_patch)
-        apply_patch(right, new_patch)
+        apply_patch(left, old_snapshot)
+        apply_patch(right, new_snapshot)
         first = inventory(left)
         second = inventory(right)
         changed, text_diff = compare_inventories(first, second)
