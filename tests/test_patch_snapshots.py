@@ -77,7 +77,7 @@ class ImmutablePatchInputs(unittest.TestCase):
         external.write_bytes(original_bytes)
         candidate = self.root / "candidate"
         candidate.mkdir()
-        (candidate / "file.txt").write_text("base\n", encoding="utf-8")
+        (candidate / "file.txt").write_bytes(b"base\n")
         original_preflight = core.patch_metadata
 
         def mutate_after_preflight(path: Path):
@@ -89,7 +89,7 @@ class ImmutablePatchInputs(unittest.TestCase):
             "patchtransit.core.patch_metadata", side_effect=mutate_after_preflight
         ):
             core.apply_patch(candidate, external)
-        self.assertEqual("first revision\n", (candidate / "file.txt").read_text())
+        self.assertEqual(b"first revision\n", (candidate / "file.txt").read_bytes())
         self.assertEqual(replacement, external.read_bytes())
 
     def test_patch_metadata_streams_instead_of_loading_complete_patch(self):
