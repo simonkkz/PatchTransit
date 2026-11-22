@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simonkkz.github.io/PatchTransit/evidence-v1.schema.json",
+  "title": "PatchTransit evidence — schema 1",
+  "description": "Machine-readable evidence produced by compare/verify. Optional properties preserve compatibility with early schema-1 releases; additive extension properties are allowed.",
+  "type": "object",
+  "required": [
+    "schema",
+    "base_tree",
+    "old_patch",
+    "new_patch",
+    "old_state_sha256",
+    "new_state_sha256",
+    "changes",
+    "changed_files",
+    "effective_diff",
+    "checks",
+    "verdict"
+  ],
+  "properties": {
+    "schema": {"const": 1},
+    "base_tree": {"$ref": "#/$defs/gitOid"},
+    "old_patch": {"$ref": "#/$defs/patchMetadata"},
+    "new_patch": {"$ref": "#/$defs/patchMetadata"},
+    "old_state_sha256": {"$ref": "#/$defs/sha256"},
+    "new_state_sha256": {"$ref": "#/$defs/sha256"},
+    "changes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/changedFile"}
+    },
+    "changed_files": {"type": "integer", "minimum": 0},
+    "effective_diff": {"type": "string"},
+    "diff_preview_complete": {
+      "type": "boolean",
+      "description": "Added after the initial schema-1 release. False means the diff is not a complete applicable text patch."
+    },
+    "checks": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/verificationChecks"}
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["identical", "changed", "regression", "improvement"]
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitOid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$",
+      "description": "SHA-1 (40 hex) or SHA-256 (64 hex) Git tree ID."
+    },
+    "patchMetadata": {
+      "type": "object",
+      "required": ["sha256", "bytes", "files", "added_lines", "removed_lines", "hunks"],
+      "properties": {
+        "sha256": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/sha256"}
+          ]
+        },
+        "bytes": {"type": "integer", "minimum": 0},
+        "files": {"type": "array", "items": {"type": "string"}},
+        "added_lines": {"type": "integer", "minimum": 0},
+        "removed_lines": {"type": "integer", "minimum": 0},
+        "hunks": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "changedFile": {
+      "type": "object",
+      "required": ["path", "change", "before_sha256", "after_sha256"],
+      "properties": {
+        "path": {"type": "string"},
+        "change": {"type": "string", "enum": ["added", "deleted", "modified"]},
+        "before_sha256": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/sha256"}
+          ]
+        },
+        "after_sha256": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/sha256"}
+          ]
+        },
+        "before_executable": {"type": ["boolean", "null"]},
+        "after_executable": {"type": ["boolean", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "commandEvidence": {
+      "type": "object",
+      "required": ["exit_code", "duration_ms"],
+      "properties": {
+        "exit_code": {"type": ["integer", "null"]},
+        "duration_ms": {"type": "integer", "minimum": 0},
+        "timeout": {"type": "boolean"},
+        "error": {"type": "string"},
+        "stdout_sha256": {"$ref": "#/$defs/sha256"},
+        "stderr_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": true
+    },
+    "verificationChecks": {
+      "type": "object",
+      "required": ["command", "old", "new"],
+      "properties": {
+        "command": {"type": "array", "items": {"type": "string"}},
+        "old": {"$ref": "#/$defs/commandEvidence"},
+        "new": {"$ref": "#/$defs/commandEvidence"}
+      },
+      "additionalProperties": true
+    }
+  }
+}

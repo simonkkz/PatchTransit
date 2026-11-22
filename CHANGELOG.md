@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Provide a cross-platform Python example script (`examples/demo.py`) with a configurable report directory, retaining the Bash shortcut and documenting Windows PowerShell quickstart commands.
+- Bundle the published schema-1 evidence JSON Schema as an offline Python package resource, keeping the wheel/sdist copy byte-for-byte identical to the GitHub Pages schema without adding runtime dependencies.
+
 ## 0.1.2 — evidence contracts, compatibility and safety
 
 - Publish a versioned JSON Schema for comparison evidence on GitHub Pages, with automated validation against current and legacy schema-1 reports.
