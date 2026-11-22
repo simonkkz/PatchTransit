@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import shlex
 import sys
 from typing import Any
 
 from . import __version__
-from .core import PatchTransitError, evaluate, inspect_patch
+from .core import PatchTransitError, evaluate, git, inspect_patch
 from .report import atomic_write, html_report, json_report, resolve_output_path
 
 
@@ -85,15 +86,47 @@ def _check_status(check: dict[str, Any]) -> str:
     return str(code) if code is not None else "unknown"
 
 
+def _git_control_roots(repository: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
+    """Find both worktree-private and shared Git metadata directories."""
+    working = repository.expanduser().resolve()
+
+    def read_path(option: str) -> pathlib.Path:
+        raw = git(["rev-parse", option], working)
+        if not raw.endswith(b"\n"):
+            raise PatchTransitError("Git returned an invalid control directory")
+        name = raw[:-1]
+        if os.name == "nt" and name.endswith(b"\r"):
+            name = name[:-1]
+        return pathlib.Path(os.fsdecode(name))
+
+    local = read_path("--absolute-git-dir").resolve()
+    shared = read_path("--git-common-dir")
+    if not shared.is_absolute():
+        shared = working / shared
+    return local, shared.resolve()
+
+
 def _validate_outputs(args: argparse.Namespace) -> None:
     sources = (args.old, args.new) if args.action == "compare" else (args.patch,)
+    outputs = tuple(
+        (flag, getattr(args, flag, None)) for flag in ("json", "html", "diff")
+    )
+    if not any(destination is not None for _, destination in outputs):
+        return
     source_paths = {
         target
         for source in sources
         for target in (source.expanduser().resolve(), resolve_output_path(source))
     }
+    try:
+        protected_roots = _git_control_roots(args.repo)
+    except PatchTransitError:
+        # Inspecting a standalone patch need not happen inside a Git checkout.
+        if args.action != "inspect":
+            raise
+        protected_roots = ()
     seen: dict[pathlib.Path, str] = {}
-    for flag in ("json", "html", "diff"):
+    for flag, output in outputs:
         output = getattr(args, flag, None)
         if output is None:
             continue
@@ -102,6 +135,8 @@ def _validate_outputs(args: argparse.Namespace) -> None:
         # even if a caller accidentally requests --json .git/config.
         if any(part.casefold() == ".git" for part in destination.parts):
             raise PatchTransitError(f"--{flag} cannot target a .git control path")
+        if any(destination.is_relative_to(root) for root in protected_roots):
+            raise PatchTransitError(f"--{flag} cannot target a Git control path")
         if destination in source_paths:
             raise PatchTransitError(f"--{flag} would overwrite an input patch")
         if previous := seen.get(destination):
