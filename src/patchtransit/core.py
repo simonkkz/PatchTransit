@@ -477,7 +477,17 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
     items: dict[str, tuple[str, bytes | str]] = {}
     total_bytes = 0
     preview_bytes = 0
-    for current, dirs, files in os.walk(root, topdown=True, followlinks=False):
+
+    def fail_on_walk_error(error: OSError) -> None:
+        # os.walk silently skips unreadable directories unless onerror is set.
+        # That could produce false "identical" evidence for an incomplete tree.
+        raise PatchTransitError(
+            f"Cannot inspect candidate directory: {error}"
+        ) from error
+
+    for current, dirs, files in os.walk(
+        root, topdown=True, onerror=fail_on_walk_error, followlinks=False
+    ):
         for name in list(dirs):
             path = pathlib.Path(current) / name
             if path.is_symlink():
