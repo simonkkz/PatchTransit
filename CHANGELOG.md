@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reject Git submodule (gitlink mode `160000`) patches in both comparisons and direct patch application before Git can silently ignore their tracked entries.
+- Distinguish missing repository/working-directory paths from missing executables in subprocess failures.
+- Reject Windows-reserved punctuation in Git tree entries, patches and symlink targets on all hosts; reject C0 filename controls on Windows before filesystem access.
+- Apply patches with LF-preserving Git settings so global `core.autocrlf=true` cannot change candidate files or their hashes.
 - Display control and bidirectional formatting characters as explicit escape sequences in HTML evidence, preventing misleading file path rendering.
 - Upload coverage for pull requests using OIDC for trusted branches and tokenless uploads for forks, with non-blocking patch-coverage results.
 - Emit a separate Git diff header for every content-modified file, so an empty added/deleted file followed by a normal edit remains an applicable effective diff.

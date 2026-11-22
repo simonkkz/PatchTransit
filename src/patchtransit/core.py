@@ -79,6 +79,8 @@ def run(
     # Anonymous temporary files also prevent pipe inheritance from stalling
     # the parent if a command launches a descendant with the same handles.
     timeout_seconds = _timeout_seconds(timeout)
+    if cwd is not None and not os.path.isdir(cwd):
+        raise PatchTransitError(f"Working directory is not a directory: {cwd}")
     if args and args[0] == "git" and env is None:
         env = _git_env()
     try:
@@ -135,9 +137,19 @@ def run(
             return subprocess.CompletedProcess(
                 args, returncode, stdout.read(), stderr.read()
             )
-    except FileNotFoundError as exc:
-        raise PatchTransitError(f"Required executable not found: {args[0]}") from exc
     except OSError as exc:
+        if (
+            cwd is not None
+            and isinstance(exc, (FileNotFoundError, NotADirectoryError))
+            and not os.path.isdir(cwd)
+        ):
+            raise PatchTransitError(
+                f"Working directory is not a directory: {cwd}"
+            ) from exc
+        if isinstance(exc, FileNotFoundError):
+            raise PatchTransitError(
+                f"Required executable not found: {args[0]}"
+            ) from exc
         raise PatchTransitError(f"Cannot run executable {args[0]}: {exc}") from exc
 
 
@@ -196,6 +208,10 @@ def _portable_name(name: str) -> bool:
     if not name or "\\" in name or ":" in name or "\x00" in name:
         return False
     for component in pathlib.PurePosixPath(name).parts:
+        if any(char in '<>"|?*' for char in component):
+            return False
+        if os.name == "nt" and any(ord(char) < 32 for char in component):
+            return False
         if component in ("", ".", ".."):
             continue
         if (
@@ -510,6 +526,14 @@ def _patch_numstat(
     return entries
 
 
+_GITLINK_MODE_LINE = re.compile(
+    rb"(?:"
+    rb"(?:old|new|new file|deleted file) mode 160000"
+    rb"|index [0-9a-fA-F]{1,64}\.\.[0-9a-fA-F]{1,64} 160000"
+    rb")\r?"
+)
+
+
 def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
     if filename is None:
         return {
@@ -523,6 +547,19 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
     digest = hashlib.sha256()
     size = hunks = 0
     prefix = b""
+    in_header = False
+
+    def inspect_line(line: bytes) -> None:
+        nonlocal hunks, in_header
+        if line.startswith(b"diff --git "):
+            in_header = True
+        elif line.startswith((b"@@ ", b"GIT binary patch", b"Binary files ")):
+            in_header = False
+        elif in_header and _GITLINK_MODE_LINE.fullmatch(line):
+            raise PatchTransitError("Git submodules are unsupported in patches")
+        if line.startswith(b"@@ "):
+            hunks += 1
+
     try:
         with _regular_patch_stream(filename) as source:
             while block := source.read(64 * 1024):
@@ -530,16 +567,14 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
                 if size > MAX_ARCHIVE_BYTES:
                     raise PatchTransitError("Patch exceeds maximum accepted size")
                 digest.update(block)
-                # A patch is LF-framed even when its contents contain bare CRs.
+                # Retain only the header-length prefix of each LF-framed line.
                 fragments = block.split(b"\n")
                 for line in fragments[:-1]:
-                    if (prefix + line[: 3 - len(prefix)]) == b"@@ ":
-                        hunks += 1
+                    inspect_line(prefix + line[: 160 - len(prefix)])
                     prefix = b""
-                if len(prefix) < 3:
-                    prefix += fragments[-1][: 3 - len(prefix)]
-            if prefix == b"@@ ":
-                hunks += 1
+                prefix += fragments[-1][: 160 - len(prefix)]
+            if prefix:
+                inspect_line(prefix)
     except OSError as exc:
         raise PatchTransitError(f"Cannot read patch {filename}: {exc}") from exc
     if size == 0:
@@ -579,16 +614,30 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
 
 
 def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
+    if patch is not None:
+        try:
+            patch_metadata(patch.absolute())
+        except PatchTransitError as exc:
+            message = str(exc)
+            if message.startswith("Invalid patch syntax: "):
+                raise PatchTransitError(
+                    "Patch did not apply to the selected base tree: "
+                    + message.removeprefix("Invalid patch syntax: ")
+                ) from exc
+            raise
+    _apply_preflighted_patch(path, patch)
+
+
+def _apply_preflighted_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
     if patch is None:
         return
     patch = patch.absolute()
-    # Validate standalone use as well as evaluate()'s private snapshots.
     # A FIFO may have st_size==0 but is not an empty regular Git patch.
     with _regular_patch_stream(patch) as source:
         if os.fstat(source.fileno()).st_size == 0:
             return
     for action in ("--check", None):
-        cmd = ["git", "apply", "--whitespace=nowarn"]
+        cmd = ["git", "-c", "core.autocrlf=false", "apply", "--whitespace=nowarn"]
         if action:
             cmd.append(action)
         cmd.extend(("--", str(patch)))
@@ -1095,8 +1144,8 @@ def evaluate(
         right.mkdir()
         export_tree(repo, tree, left)
         export_tree(repo, tree, right)
-        apply_patch(left, old_snapshot)
-        apply_patch(right, new_snapshot)
+        _apply_preflighted_patch(left, old_snapshot)
+        _apply_preflighted_patch(right, new_snapshot)
         first = inventory(left)
         second = inventory(right)
         changed, text_diff = compare_inventories(first, second)
