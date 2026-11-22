@@ -833,10 +833,18 @@ def compare_inventories(
                 f"--- {_git_path(filename)}: non-UTF-8 contents differ (hashes in JSON)\n"
             )
             continue
-        if a is None or b is None:
+        # A unified-only hunk after a Git new/deleted-file mode header can
+        # be parsed as part of the *previous* file. Start every content
+        # change with its own Git diff header, not only additions/deletions.
+        if (
+            a is None
+            or b is None
+            or not (a and b and a[0].endswith("+x") != b[0].endswith("+x"))
+        ):
             append_diff(
                 f"diff --git {_git_path(f'a/{filename}')} {_git_path(f'b/{filename}')}\n"
             )
+        if a is None or b is None:
             if a is None:
                 append_diff(
                     f"new file mode {'100755' if b and b[0].endswith('+x') else '100644'}\n"
