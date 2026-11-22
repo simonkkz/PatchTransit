@@ -2,6 +2,7 @@
 
 ## 0.1.1 — maintenance and quality checks
 
+- Use constant-length temporary filenames for atomic reports so long valid output names do not exceed filesystem `NAME_MAX`.
 - Bound inline text candidate inventories to 64 MiB each and use streamed hashes beyond the preview budget without changing tree fingerprints or manifests.
 - Bound Git subprocess stdout/stderr captures to 16 MiB per stream while running, preventing unbounded `git apply --numstat` output from exhausting memory.
 - Canonicalize whole-tree fingerprints across inline/filehash representations and avoid false changes when those representations differ.
