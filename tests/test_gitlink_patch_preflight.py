@@ -7,7 +7,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from patchtransit.core import PatchTransitError, evaluate, inspect_patch, patch_metadata
+from patchtransit.core import (
+    PatchTransitError,
+    apply_patch,
+    evaluate,
+    inspect_patch,
+    patch_metadata,
+)
 
 
 class GitlinkPatchPreflight(unittest.TestCase):
@@ -48,6 +54,11 @@ class GitlinkPatchPreflight(unittest.TestCase):
             evaluate(self.repo, "HEAD", None, patch)
         with self.assertRaisesRegex(PatchTransitError, "submodules are unsupported"):
             inspect_patch(patch)
+        candidate = self.root / "candidate"
+        candidate.mkdir()
+        (candidate / "readme.txt").write_text("base\n", encoding="utf-8")
+        with self.assertRaisesRegex(PatchTransitError, "submodules are unsupported"):
+            apply_patch(candidate, patch)
 
     def test_modified_gitlink_is_detected_by_index_mode(self):
         self.git(self.repo, "add", "vendor/module")
