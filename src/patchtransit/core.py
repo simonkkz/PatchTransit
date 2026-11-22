@@ -6,6 +6,7 @@ HEAD, refs, or worktrees. Candidate changes live under TemporaryDirectory.
 
 from __future__ import annotations
 
+import base64
 import difflib
 import hashlib
 import math
@@ -17,6 +18,7 @@ import subprocess
 import tempfile
 import time
 import unicodedata
+import zlib
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from typing import IO
@@ -538,6 +540,41 @@ _GITLINK_MODE_LINE = re.compile(
 )
 
 
+def _binary_delta_output_size(prefix: bytes) -> int | None:
+    offset = 0
+    for _ in range(2):
+        value = shift = 0
+        while offset < len(prefix):
+            byte = prefix[offset]
+            offset += 1
+            value |= (byte & 0x7F) << shift
+            if value > MAX_FILE_BYTES:
+                raise PatchTransitError("Binary patch exceeds maximum file size")
+            if not byte & 0x80:
+                break
+            shift += 7
+        else:
+            return None
+    return value
+
+
+def _git_base85_bytes(line: bytes) -> bytes:
+    initial = line[0]
+    if 65 <= initial <= 90:
+        count = initial - 64
+    elif 97 <= initial <= 122:
+        count = initial - 96 + 26
+    else:
+        raise PatchTransitError("Invalid patch syntax: malformed Git binary line")
+    if len(line) != 1 + 5 * ((count + 3) // 4):
+        raise PatchTransitError("Invalid patch syntax: malformed Git binary line")
+    try:
+        # Git binary patches use the same base85 alphabet as Python's b85.
+        return base64.b85decode(line[1:])[:count]
+    except ValueError as exc:
+        raise PatchTransitError("Invalid patch syntax: malformed Git base85") from exc
+
+
 def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
     if filename is None:
         return {
@@ -551,18 +588,66 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
     digest = hashlib.sha256()
     size = hunks = 0
     prefix = b""
-    in_header = False
+    in_header = in_binary = False
+    declared_binary_bytes = 0
+    delta_stream = zlib.decompressobj()
+    reading_delta = False
+    delta_prefix = b""
 
     def inspect_line(line: bytes) -> None:
-        nonlocal hunks, in_header
+        nonlocal hunks, in_header, in_binary, declared_binary_bytes
+        nonlocal delta_stream, reading_delta, delta_prefix
+        line = line.removesuffix(b"\r")
         if line.startswith(b"diff --git "):
-            in_header = True
-        elif line.startswith((b"@@ ", b"GIT binary patch", b"Binary files ")):
+            in_header, in_binary = True, False
+            reading_delta = False
+        elif line == b"GIT binary patch":
+            in_header, in_binary = False, True
+        elif line.startswith((b"@@ ", b"Binary files ")):
             in_header = False
         elif in_header and _GITLINK_MODE_LINE.fullmatch(line):
             raise PatchTransitError("Git submodules are unsupported in patches")
         if line.startswith(b"@@ "):
             hunks += 1
+        if not in_binary:
+            return
+        if line.startswith((b"literal ", b"delta ")):
+            method, declared = line.split(b" ", 1)
+            if not declared.isdigit():
+                return  # Git reports invalid binary headers below.
+            size = int(declared)
+            if size > MAX_FILE_BYTES:
+                raise PatchTransitError("Binary patch exceeds maximum file size")
+            if method == b"literal":
+                declared_binary_bytes += size
+                reading_delta = False
+            else:
+                delta_stream = zlib.decompressobj()
+                delta_prefix = b""
+                reading_delta = True
+            if declared_binary_bytes > MAX_ARCHIVE_BYTES:
+                raise PatchTransitError("Binary patch exceeds total safety size limit")
+        elif line and reading_delta:
+            try:
+                delta_prefix += delta_stream.decompress(
+                    _git_base85_bytes(line), max_length=32 - len(delta_prefix)
+                )
+            except zlib.error as exc:
+                raise PatchTransitError(
+                    "Invalid patch syntax: corrupt binary delta"
+                ) from exc
+            result_size = _binary_delta_output_size(delta_prefix)
+            if result_size is not None:
+                declared_binary_bytes += result_size
+                if declared_binary_bytes > MAX_ARCHIVE_BYTES:
+                    raise PatchTransitError(
+                        "Binary patch exceeds total safety size limit"
+                    )
+                reading_delta = False
+            elif len(delta_prefix) == 32:
+                raise PatchTransitError("Invalid patch syntax: binary delta header")
+        elif not line:
+            reading_delta = False
 
     try:
         with _regular_patch_stream(filename) as source:
