@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Apply patches with LF-preserving Git settings so global `core.autocrlf=true` cannot change candidate files or their hashes.
 - Display control and bidirectional formatting characters as explicit escape sequences in HTML evidence, preventing misleading file path rendering.
 - Upload coverage for pull requests using OIDC for trusted branches and tokenless uploads for forks, with non-blocking patch-coverage results.
 - Emit a separate Git diff header for every content-modified file, so an empty added/deleted file followed by a normal edit remains an applicable effective diff.

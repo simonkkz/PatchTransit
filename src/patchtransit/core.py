@@ -588,7 +588,7 @@ def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
         if os.fstat(source.fileno()).st_size == 0:
             return
     for action in ("--check", None):
-        cmd = ["git", "apply", "--whitespace=nowarn"]
+        cmd = ["git", "-c", "core.autocrlf=false", "apply", "--whitespace=nowarn"]
         if action:
             cmd.append(action)
         cmd.extend(("--", str(patch)))
