@@ -62,9 +62,18 @@ class EmptyFileDiffRoundtrip(unittest.TestCase):
                 self.assertTrue(_preview_complete(changes, old, new, diff))
                 patchfile = base.parent / f"{base.name}.patch"
                 try:
-                    patchfile.write_text(diff, encoding="utf-8")
+                    # Path.write_text() converts LF to CRLF on Windows.
+                    # A patch is a byte-oriented LF-framed format.
+                    patchfile.write_bytes(diff.encode("utf-8"))
                     result = subprocess.run(
-                        ("git", "apply", "--", str(patchfile)),
+                        (
+                            "git",
+                            "-c",
+                            "core.autocrlf=false",
+                            "apply",
+                            "--",
+                            str(patchfile),
+                        ),
                         cwd=base,
                         capture_output=True,
                         check=False,
