@@ -1128,10 +1128,12 @@ def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> CommandEvide
             tempfile.TemporaryFile(mode="w+b") as stdout,
             tempfile.TemporaryFile(mode="w+b") as stderr,
         ):
+            environment = _without_git_env()
+            environment["PWD"] = str(cwd.resolve())
             with subprocess.Popen(
                 command,
                 cwd=cwd,
-                env=_without_git_env(),
+                env=environment,
                 stdout=stdout,
                 stderr=stderr,
                 stdin=subprocess.DEVNULL,

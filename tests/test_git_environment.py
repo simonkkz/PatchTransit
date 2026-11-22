@@ -91,6 +91,18 @@ class GitEnvironmentIsolation(unittest.TestCase):
         self.assertEqual(0, result["exit_code"])
         self.assertFalse(result.get("timeout", False))
 
+    def test_verification_pwd_matches_candidate_directory(self):
+        candidate = self.root / "candidate with spaces"
+        candidate.mkdir()
+        original_pwd = self.root / "unrelated"
+        original_pwd.mkdir()
+        script = (
+            "import os,sys; sys.exit(0 if os.environ.get('PWD') == os.getcwd() else 3)"
+        )
+        with patch.dict(os.environ, {"PWD": str(original_pwd)}):
+            result = execute([sys.executable, "-c", script], candidate, timeout=5)
+        self.assertEqual(0, result["exit_code"])
+
     def test_git_env_keeps_normal_environment_and_disables_lazy_fetch(self):
         with patch.dict(
             os.environ, {**self.contaminated_env(), "PATCHTRANSIT_TEST": "enabled"}
