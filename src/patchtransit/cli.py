@@ -77,6 +77,52 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
+def _split_windows_command(command: str) -> list[str]:
+    """Parse argv according to the Windows C runtime's backslash/quote rules.
+
+    `shlex.split` applies POSIX escaping, so `C:\\Python\\python.exe` loses
+    its path separators on Windows. Do not invoke a command shell here.
+    """
+    arguments: list[str] = []
+    index = 0
+    length = len(command)
+    while index < length:
+        while index < length and command[index] in " \t":
+            index += 1
+        if index == length:
+            break
+        current: list[str] = []
+        quoted = False
+        while index < length:
+            if command[index] in " \t" and not quoted:
+                break
+            backslashes = 0
+            while index < length and command[index] == "\\":
+                backslashes += 1
+                index += 1
+            if index < length and command[index] == '"':
+                current.extend("\\" * (backslashes // 2))
+                if backslashes % 2:
+                    current.append('"')
+                elif quoted and index + 1 < length and command[index + 1] == '"':
+                    current.append('"')
+                    index += 1
+                else:
+                    quoted = not quoted
+                index += 1
+            else:
+                current.extend("\\" * backslashes)
+                if index < length and (command[index] not in " \t" or quoted):
+                    current.append(command[index])
+                    index += 1
+        arguments.append("".join(current))
+    return arguments
+
+
+def _split_command(command: str) -> list[str]:
+    return _split_windows_command(command) if os.name == "nt" else shlex.split(command)
+
+
 def _check_status(check: dict[str, Any]) -> str:
     if check.get("timeout"):
         return "timeout"
@@ -169,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
             raise PatchTransitError(
                 "Execution is opt-in: provide --execute to run --command"
             )
-        command = shlex.split(args.command) if args.command else None
+        command = _split_command(args.command) if args.command else None
         if args.command and not command:
             raise PatchTransitError("Empty --command")
         old = args.old if args.action == "compare" else None

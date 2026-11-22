@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Parse `--command` using Windows C-runtime quoting on Windows, preserving absolute executable paths, backslashes and quoted arguments without invoking a shell.
+
 ## 0.1.1 — maintenance and quality checks
 
 - Protect actual Git metadata directories, including separate Git dirs and linked worktree common dirs, from report output overwrites.
