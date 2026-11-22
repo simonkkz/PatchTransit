@@ -75,6 +75,7 @@ def run(
     # Git output should not be held in unlimited subprocess.run buffers.
     # Anonymous temporary files also prevent pipe inheritance from stalling
     # the parent if a command launches a descendant with the same handles.
+    timeout_seconds = _timeout_seconds(timeout)
     if args and args[0] == "git" and env is None:
         env = _git_env()
     try:
@@ -94,7 +95,7 @@ def run(
                 stdout=stdout,
                 stderr=stderr,
             ) as process:
-                deadline = time.monotonic() + timeout
+                deadline = time.monotonic() + timeout_seconds
                 while True:
                     if (
                         os.fstat(stdout.fileno()).st_size > MAX_GIT_CAPTURE_BYTES

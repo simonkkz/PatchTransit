@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Reject case-insensitive or canonically equivalent file/directory aliases in committed and patched candidate trees, before cross-platform extraction can silently collapse distinct Git paths.
+- Validate timeouts for internal Git subprocesses as well as optional test commands, avoiding uncaught integer conversion errors in the Python API.
 - Treat hyphen-prefixed patch filenames as operands when invoking Git, not command-line flags.
 - Report Codecov upload failures in the separate Coverage workflow instead of masking them.
 - Provide a cross-platform Python example script (`examples/demo.py`) with a configurable report directory, retaining the Bash shortcut and documenting Windows PowerShell quickstart commands.
