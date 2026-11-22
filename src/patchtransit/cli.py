@@ -11,7 +11,7 @@ import unicodedata
 from typing import Any
 
 from . import __version__
-from .core import PatchTransitError, evaluate, git, inspect_patch
+from .core import PatchTransitError, _timeout_seconds, evaluate, git, inspect_patch
 from .report import atomic_write, html_report, json_report, resolve_output_path
 
 
@@ -227,8 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             for name in result["files"]:
                 print(f"  {_terminal_safe(name)}")
             return 0
-        if args.timeout <= 0:
-            raise PatchTransitError("--timeout must be positive")
+        _timeout_seconds(args.timeout)
         if args.execute and not args.command:
             raise PatchTransitError("--execute requires --command")
         if args.command and not args.execute:

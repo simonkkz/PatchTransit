@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import math
 import os
 import pathlib
 import re
@@ -861,7 +862,21 @@ def _hash_stream(stream: IO[bytes]) -> str:
     return digest.hexdigest()
 
 
+def _timeout_seconds(timeout: int) -> float:
+    """Validate a timeout before converting its arbitrary-size Python int."""
+    if timeout <= 0:
+        raise PatchTransitError("--timeout must be positive")
+    try:
+        seconds = float(timeout)
+    except OverflowError as exc:
+        raise PatchTransitError("--timeout exceeds supported numeric range") from exc
+    if not math.isfinite(seconds):
+        raise PatchTransitError("--timeout exceeds supported numeric range")
+    return seconds
+
+
 def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> dict[str, Any]:
+    timeout_seconds = _timeout_seconds(timeout)
     started = time.monotonic()
     try:
         # Anonymous temporary files avoid waiting for pipes inherited by a
@@ -877,7 +892,7 @@ def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> dict[str, An
                 stderr=stderr,
                 stdin=subprocess.DEVNULL,
             ) as process:
-                deadline = started + timeout
+                deadline = started + timeout_seconds
                 while True:
                     if (
                         os.fstat(stdout.fileno()).st_size > MAX_COMMAND_OUTPUT_BYTES
