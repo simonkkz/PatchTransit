@@ -591,6 +591,11 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
                 else:
                     items[rel] = ("file" + suffix, path.read_bytes())
                     preview_bytes += size
+            else:
+                # Candidate trees only contain regular Git blobs and links.
+                # Do not silently omit a FIFO, socket, device, or vanished file
+                # and then claim the inventory is complete or identical.
+                raise PatchTransitError(f"Unsupported candidate entry: {rel!r}")
             if total_bytes > MAX_ARCHIVE_BYTES:
                 raise PatchTransitError(
                     "Candidate tree exceeds total safety size limit"

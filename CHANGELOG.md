@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reject FIFOs, Unix sockets, device nodes and other unsupported entries during candidate inventories instead of silently omitting them from comparison evidence.
 - Bound cumulative tracked pathname bytes to 64 MiB on both committed trees and patched candidates, complementing existing file-size and entry-count limits.
 - Add project website, source, issue tracker, releases and changelog links to Python distribution metadata, with explicit Python 3.11–3.15 classifiers.
 - Reject Windows `CONIN$` and `CONOUT$` console device paths (including case and extension variants) in Git entries, patches and symlink targets.
