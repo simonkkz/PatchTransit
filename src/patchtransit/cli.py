@@ -13,7 +13,13 @@ from typing import Any
 
 from . import __version__
 from .core import PatchTransitError, _timeout_seconds, evaluate, git, inspect_patch
-from .report import atomic_write, html_report, json_report, resolve_output_path
+from .report import (
+    _expand_user_path,
+    atomic_write,
+    html_report,
+    json_report,
+    resolve_output_path,
+)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -235,12 +241,12 @@ def _validate_outputs(args: argparse.Namespace) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
-        args.repo = args.repo.expanduser()
+        args.repo = _expand_user_path(args.repo)
         if args.action == "compare":
-            args.old = args.old.expanduser()
-            args.new = args.new.expanduser()
+            args.old = _expand_user_path(args.old)
+            args.new = _expand_user_path(args.new)
         else:
-            args.patch = args.patch.expanduser()
+            args.patch = _expand_user_path(args.patch)
         _validate_outputs(args)
         if args.action == "inspect":
             result = inspect_patch(args.patch.resolve())
