@@ -30,6 +30,7 @@ A 40-file diff gets updated after review. Did it fix the race, change a test, or
 - Optional test command runs separately on **both** candidate trees, with explicit opt-in.
 - Generates standalone HTML and machine-readable JSON evidence plus a bounded effective diff preview.
 - No LLM, API key, account, service, telemetry, or runtime Python dependencies.
+- Includes PEP 561 `py.typed` metadata so type checkers can read the annotations on the installed Python API.
 
 ## 30-second quickstart
 
