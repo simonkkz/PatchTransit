@@ -454,7 +454,7 @@ def _patch_numstat(
     command = ["git", "apply"]
     if reverse:
         command.append("--reverse")
-    command.extend(("--numstat", "-z", "--", str(filename)))
+    command.extend(("--numstat", "-z", "--", str(filename.absolute())))
     result = run(command)
     if result.returncode:
         raise PatchTransitError(
@@ -550,6 +550,7 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
 def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
     if patch is None:
         return
+    patch = patch.absolute()
     # Validate standalone use as well as evaluate()'s private snapshots.
     # A FIFO may have st_size==0 but is not an empty regular Git patch.
     with _regular_patch_stream(patch) as source:

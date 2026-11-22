@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Resolve caller-relative patch paths before running Git from a candidate working directory; support the literal filename `-` as an actual file instead of stdin.
 - Reject case-insensitive or canonically equivalent file/directory aliases in committed and patched candidate trees, before cross-platform extraction can silently collapse distinct Git paths.
 - Validate timeouts for internal Git subprocesses as well as optional test commands, avoiding uncaught integer conversion errors in the Python API.
 - Reject empty executable argument vectors in the Python API instead of silently skipping verification or raising an uncaught IndexError.
