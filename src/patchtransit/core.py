@@ -16,6 +16,7 @@ import stat
 import subprocess
 import tempfile
 import time
+import unicodedata
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from typing import IO
@@ -207,6 +208,19 @@ def _canonical_git_path(name: str) -> bool:
     return bool(name) and all(part not in ("", ".", "..") for part in name.split("/"))
 
 
+def _register_portable_path(name: str, seen: dict[str, str]) -> None:
+    """Reject file and directory aliases on case-insensitive or NFC filesystems."""
+    pieces = name.split("/")
+    for end in range(1, len(pieces) + 1):
+        prefix = "/".join(pieces[:end])
+        folded = unicodedata.normalize("NFC", prefix.casefold())
+        previous = seen.setdefault(folded, prefix)
+        if previous != prefix:
+            raise PatchTransitError(
+                f"Git paths collide on portable filesystems: {previous!r} and {prefix!r}"
+            )
+
+
 def _member_path(name: str) -> pathlib.PurePosixPath:
     item = pathlib.PurePosixPath(name)
     if (
@@ -300,6 +314,7 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
     count = 0
     path_bytes = 0
     links: list[tuple[pathlib.Path, str]] = []
+    portable_names: dict[str, str] = {}
     try:
         for record in _nul_records(tree_proc.stdout):
             count += 1
@@ -316,6 +331,7 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
                 raise PatchTransitError("Invalid Git tree entry")
             mode_bytes, kind, oid = parts
             item = _member_path(os.fsdecode(path))
+            _register_portable_path(item.as_posix(), portable_names)
             if mode_bytes == b"160000" and kind == b"commit":
                 raise PatchTransitError(f"Git submodules are unsupported: {item}")
             if mode_bytes not in (b"100644", b"100755", b"120000") or kind != b"blob":
@@ -554,6 +570,7 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
     total_bytes = 0
     path_bytes = 0
     preview_bytes = 0
+    portable_names: dict[str, str] = {}
 
     def fail_on_walk_error(error: OSError) -> None:
         # os.walk silently skips unreadable directories unless onerror is set.
@@ -584,6 +601,7 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
                     "Candidate tree exceeds cumulative pathname size limit"
                 )
             _member_path(rel)
+            _register_portable_path(rel, portable_names)
             if path.is_symlink():
                 target = os.readlink(path)
                 link_bytes = len(os.fsencode(target))
