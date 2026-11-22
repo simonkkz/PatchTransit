@@ -133,6 +133,12 @@ def html_report(result: dict[str, Any]) -> str:
             cls = "file"
         colored_diff.append(f'<span class="{cls}">{e(line)}</span>')
     rendered_diff = "\n".join(colored_diff) if colored_diff else "No changed lines."
+    incomplete_notice = (
+        '<p class="muted">Some changes are hash-only or truncated. This diff is a '
+        "preview, not a complete applicable patch. Refer to the JSON manifest.</p>"
+        if result.get("diff_preview_complete") is False
+        else ""
+    )
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark"><title>PatchTransit · Evidence</title>
@@ -160,5 +166,5 @@ footer{{padding:28px 0;color:var(--muted);font-size:12px}}@media(max-width:600px
 <p class="muted">New output: <code>{e(result["new_state_sha256"])}</code></p></section>
 {checks_view}
 <section><h2>Changed files</h2><table><thead><tr><th>Path</th><th>Status</th><th>Before</th><th>After</th></tr></thead><tbody>{rows}</tbody></table></section>
-<section><h2>Effective diff</h2><p class="muted">Computed from the resulting files, not by subtracting raw patch text.</p>
-<pre aria-label="Effective diff">{rendered_diff}</pre></section><footer>Generated locally by PatchTransit. Reproducible evidence ≠ a guarantee of correctness. Review code and execution results independently.</footer></main></body></html>"""
+<section><h2>Effective diff preview</h2><p class="muted">Computed from the resulting files, not by subtracting raw patch text.</p>
+{incomplete_notice}<pre aria-label="Effective diff preview">{rendered_diff}</pre></section><footer>Generated locally by PatchTransit. Reproducible evidence ≠ a guarantee of correctness. Review code and execution results independently.</footer></main></body></html>"""
