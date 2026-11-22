@@ -60,6 +60,30 @@ class RenameSourcePaths(unittest.TestCase):
         self.assertEqual({"old name.txt", "new name.txt"}, set(metadata["files"]))
         self.assertEqual((1, 1), (metadata["added_lines"], metadata["removed_lines"]))
 
+    def test_copy_metadata_includes_both_referenced_paths(self):
+        (self.repo / "copied name.txt").write_bytes(
+            (self.repo / "old name.txt").read_bytes()
+        )
+        self.git("add", "copied name.txt")
+        diff = self.root / "copy.patch"
+        diff.write_bytes(self.git("diff", "--cached", "-C", "--find-copies-harder"))
+        self.assertIn(b"copy from old name.txt", diff.read_bytes())
+        metadata = patch_metadata(diff)
+        self.assertEqual(["copied name.txt", "old name.txt"], metadata["files"])
+        self.assertEqual((0, 0), (metadata["added_lines"], metadata["removed_lines"]))
+
+    def test_unsafe_copy_source_is_rejected(self):
+        patch_file = self.root / "unsafe-copy.patch"
+        patch_file.write_text(
+            "diff --git a/.git/config b/copied.txt\n"
+            "similarity index 100%\n"
+            "copy from .git/config\n"
+            "copy to copied.txt\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(PatchTransitError, "unsafe path.*.git/config"):
+            patch_metadata(patch_file)
+
     def test_unsafe_rename_source_cannot_hide_behind_safe_target(self):
         patch_file = self.root / "unsafe-rename.patch"
         patch_file.write_text(

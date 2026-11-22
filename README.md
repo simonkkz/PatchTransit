@@ -81,7 +81,7 @@ A `regression` verdict means the old command exited successfully and the new com
 patchtransit inspect before.patch
 ```
 
-For rename patches, inspection includes both the original source path and the destination path. The added/removed line totals still describe the forward patch, not the reverse inspection pass. Both paths undergo the same portability and safety checks.
+For rename and copy patches, inspection includes both referenced source and destination paths. The added/removed line totals still describe the forward patch, not the reverse inspection pass. Both paths undergo the same portability and safety checks (even though a copy leaves its source file unchanged).
 
 ## What is actually compared?
 
