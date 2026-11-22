@@ -14,7 +14,7 @@ PatchTransit is a local developer utility, not a containment boundary. Treat rep
 
 - `--execute` runs code with the current user's privileges. A test can access the host, network, sensitive files, or other processes. Use a container or VM for untrusted repositories.
 - A Git patch can still contain malicious source that a developer later chooses to execute.
-- Reports include diff content and paths. They are not automatically sanitized and are not safe to post without review.
+- Reports include diff content and paths. They are not automatically sanitized and are not safe to post without review. The HTML report escapes control and bidirectional formatting characters in displayed evidence to prevent misleading visual path names; it does not remove sensitive data.
 - Git is a required external executable. Inherited `GIT_*` overrides are cleared for internal Git commands to prevent another repository's worktree, index or objects from being selected unintentionally. Repository/global Git configuration can still influence Git operations; use a trusted environment.
 - Candidate tree inventory rejects special filesystem entries (FIFOs, sockets, devices and missing listed files) instead of silently omitting them from evidence. The Git exporter itself materializes regular files and symlinks only.
 - A crafted Git repository or patch may exceed configured resource limits. Both extracted base trees and patched candidate inventories enforce per-file, symlink-target, aggregate content byte, 64 MiB cumulative pathname byte and 100,000-entry limits. Post-application checks cannot prevent all temporary disk usage or resource-exhaustion cases.
