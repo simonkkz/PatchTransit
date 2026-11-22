@@ -8,6 +8,7 @@ import os
 import pathlib
 import re
 import tempfile
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -34,17 +35,17 @@ def atomic_write(path: pathlib.Path, contents: str) -> None:
             os.unlink(tmp)
 
 
-def json_report(result: dict[str, Any]) -> str:
+def json_report(result: Mapping[str, Any]) -> str:
     # POSIX Git paths may contain arbitrary bytes. Preserve undecodable bytes
     # as JSON Unicode escapes while keeping valid UTF-8 text readable.
-    encoded = json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2)
+    encoded = json.dumps(dict(result), ensure_ascii=False, sort_keys=True, indent=2)
     return (
         re.sub("[\ud800-\udfff]", lambda match: f"\\u{ord(match.group()):04x}", encoded)
         + "\n"
     )
 
 
-def html_report(result: dict[str, Any]) -> str:
+def html_report(result: Mapping[str, Any]) -> str:
     def e(value: object) -> str:
         # Invalid UTF-8 bytes from POSIX filenames cannot be embedded directly
         # in an HTML document. Display them as explicit, reversible escapes.

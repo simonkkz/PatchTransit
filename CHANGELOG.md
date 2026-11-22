@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Ship the PEP 561 `py.typed` marker inside source and wheel distributions so downstream type checkers can inspect the existing Python API annotations.
+- Define typed `PatchMetadata`, `ChangedFile`, `CommandEvidence`, `VerificationChecks` and `ComparisonEvidence` contracts for the existing JSON/Python API without changing the serialized evidence structure.
 - Reject FIFOs, Unix sockets, device nodes and other unsupported entries during candidate inventories instead of silently omitting them from comparison evidence.
 - Validate arbitrarily large `--timeout` values before launching optional verification commands, returning a normal CLI error rather than an uncaught Python integer-to-float `OverflowError`.
 - Bound cumulative tracked pathname bytes to 64 MiB on both committed trees and patched candidates, complementing existing file-size and entry-count limits.

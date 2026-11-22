@@ -58,6 +58,21 @@ patchtransit compare previous.patch revised.patch \
 
 `report.html` opens offline in any browser. It contains no external scripts or tracking pixels.
 
+### Typed Python API
+
+Python integrations can call the comparison directly. The returned ordinary dictionary
+has a typed evidence contract in `patchtransit.models` (also exposed to installed
+type checkers through the PEP 561 marker):
+
+```python
+from pathlib import Path
+from patchtransit.core import evaluate
+from patchtransit.models import ComparisonEvidence
+
+evidence: ComparisonEvidence = evaluate(Path("."), "HEAD", None, Path("changes.patch"))
+print(evidence["verdict"], evidence["changed_files"])
+```
+
 ### Verify a single patch against a base
 
 ```bash

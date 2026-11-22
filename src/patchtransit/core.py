@@ -18,7 +18,17 @@ import tempfile
 import time
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
-from typing import IO, Any
+from typing import IO
+
+from .models import (
+    ChangedFile,
+    ChangeKind,
+    CommandEvidence,
+    ComparisonEvidence,
+    PatchMetadata,
+    Verdict,
+    VerificationChecks,
+)
 
 MAX_ARCHIVE_BYTES = 2 * 1024**3
 MAX_SYMLINK_BYTES = 4096
@@ -450,7 +460,7 @@ def _patch_numstat(
     return entries
 
 
-def patch_metadata(filename: pathlib.Path | None) -> dict[str, Any]:
+def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
     if filename is None:
         return {
             "sha256": None,
@@ -670,8 +680,8 @@ def _git_path(path: str) -> str:
 
 def compare_inventories(
     left: dict[str, tuple[str, bytes | str]], right: dict[str, tuple[str, bytes | str]]
-) -> tuple[list[dict[str, Any]], str]:
-    changes: list[dict[str, Any]] = []
+) -> tuple[list[ChangedFile], str]:
+    changes: list[ChangedFile] = []
     diff_lines: list[str] = []
     rendered_bytes = 0
     truncated = False
@@ -706,7 +716,9 @@ def compare_inventories(
             and _digest(a) == _digest(b)
         ):
             continue
-        state = "added" if a is None else "deleted" if b is None else "modified"
+        state: ChangeKind = (
+            "added" if a is None else "deleted" if b is None else "modified"
+        )
         changes.append(
             {
                 "path": filename,
@@ -816,7 +828,7 @@ def compare_inventories(
 
 
 def _preview_complete(
-    changes: list[dict[str, Any]],
+    changes: list[ChangedFile],
     left: dict[str, tuple[str, bytes | str]],
     right: dict[str, tuple[str, bytes | str]],
     rendered: str,
@@ -875,7 +887,7 @@ def _timeout_seconds(timeout: int) -> float:
     return seconds
 
 
-def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> dict[str, Any]:
+def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> CommandEvidence:
     timeout_seconds = _timeout_seconds(timeout)
     started = time.monotonic()
     try:
@@ -962,7 +974,7 @@ def _snapshot_patch(source: pathlib.Path, destination: pathlib.Path) -> pathlib.
     return destination
 
 
-def inspect_patch(source: pathlib.Path) -> dict[str, Any]:
+def inspect_patch(source: pathlib.Path) -> PatchMetadata:
     """Inspect a single consistent snapshot rather than a mutable path."""
     with tempfile.TemporaryDirectory(prefix="patchtransit-inspect-") as sandbox:
         copy = _snapshot_patch(source, pathlib.Path(sandbox) / "input.patch")
@@ -977,7 +989,7 @@ def evaluate(
     *,
     command: list[str] | None = None,
     timeout: int = 120,
-) -> dict[str, Any]:
+) -> ComparisonEvidence:
     repo, tree = repository(repo_path, revision)
     old_patch = old_patch.resolve() if old_patch else None
     new_patch = new_patch.resolve() if new_patch else None
@@ -1026,14 +1038,22 @@ def evaluate(
 
         old_hash = state_hash(first)
         new_hash = state_hash(second)
-        checks: dict[str, Any] | None = None
+        checks: VerificationChecks | None = None
         if command:
             checks = {
                 "command": command,
                 "old": execute(command, left, timeout),
                 "new": execute(command, right, timeout),
             }
-        report: dict[str, Any] = {
+        verdict: Verdict = "identical" if not changed else "changed"
+        if checks is not None:
+            before = checks["old"]["exit_code"]
+            after = checks["new"]["exit_code"]
+            if before == 0 and after != 0:
+                verdict = "regression"
+            elif after == 0 and before != 0:
+                verdict = "improvement"
+        report: ComparisonEvidence = {
             "schema": 1,
             "base_tree": tree,
             "old_patch": old,
@@ -1045,13 +1065,6 @@ def evaluate(
             "effective_diff": text_diff,
             "diff_preview_complete": preview_complete,
             "checks": checks,
+            "verdict": verdict,
         }
-        report["verdict"] = "identical" if not changed else "changed"
-        if checks is not None:
-            before = checks["old"]["exit_code"]
-            after = checks["new"]["exit_code"]
-            if before == 0 and after != 0:
-                report["verdict"] = "regression"
-            elif after == 0 and before != 0:
-                report["verdict"] = "improvement"
         return report

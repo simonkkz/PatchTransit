@@ -8,6 +8,7 @@ import pathlib
 import shlex
 import sys
 import unicodedata
+from collections.abc import Mapping
 from typing import Any
 
 from . import __version__
@@ -143,7 +144,7 @@ def _terminal_safe(value: object) -> str:
     return "".join(escaped)
 
 
-def _check_status(check: dict[str, Any]) -> str:
+def _check_status(check: Mapping[str, Any]) -> str:
     if check.get("timeout"):
         return "timeout"
     if error := check.get("error"):
