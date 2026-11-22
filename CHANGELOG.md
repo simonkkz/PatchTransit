@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.4 — direct patch integrity and report safety
+
 - Snapshot direct Python API patch inputs before validating and applying them so later source mutations cannot bypass preflight.
 - Expand quoted home-directory (`~/`) paths consistently for CLI patch inputs and repository paths, as with report outputs.
 - Reject parent/child report output paths before writing any artifact, including case aliases and directory symlinks.
