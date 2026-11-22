@@ -44,6 +44,7 @@ def run(
     cwd: pathlib.Path | None = None,
     timeout: int = 120,
     input_data: bytes | None = None,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
     try:
         return subprocess.run(
@@ -52,6 +53,7 @@ def run(
             capture_output=True,
             cwd=cwd,
             timeout=timeout,
+            env=env,
             check=False,
         )
     except FileNotFoundError as exc:
@@ -61,7 +63,14 @@ def run(
 
 
 def git(args: list[str], cwd: pathlib.Path, *, timeout: int = 120) -> bytes:
-    completed = run(["git", *args], cwd=cwd, timeout=timeout)
+    # Partial clones can fetch missing commits/trees implicitly during
+    # rev-parse or cat-file. This tool must never cause a network fetch.
+    completed = run(
+        ["git", *args],
+        cwd=cwd,
+        timeout=timeout,
+        env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
+    )
     if completed.returncode:
         message = completed.stderr.decode("utf-8", "replace").strip()
         raise PatchTransitError(
@@ -88,6 +97,12 @@ def repository(path: pathlib.Path, revision: str) -> tuple[pathlib.Path, str]:
     )
     if not re.fullmatch(r"[a-fA-F0-9]{40,64}", tree):
         raise PatchTransitError("Could not resolve a Git tree for the base revision")
+    try:
+        git(["cat-file", "-e", f"{tree}^{{tree}}"], root)
+    except PatchTransitError as exc:
+        raise PatchTransitError(
+            "Base Git tree is not available locally (offline mode)"
+        ) from exc
     return root, tree
 
 
