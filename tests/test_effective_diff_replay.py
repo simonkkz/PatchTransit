@@ -26,6 +26,7 @@ class EffectiveDiffReplay(unittest.TestCase):
             git("init", "-q")
             git("config", "user.name", "Fixture")
             git("config", "user.email", "fixture@example.invalid")
+            git("config", "core.autocrlf", "false")
             (repo / "keep.txt").write_bytes(b"base\n")
             (repo / "remove.txt").write_bytes(b"removed later\n")
             (repo / "unchanged.txt").write_bytes(b"stay\n")
