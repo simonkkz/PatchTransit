@@ -37,7 +37,8 @@ class SymlinkChainSafety(unittest.TestCase):
         self.add_escape(self.candidate)
         # Both links pass a per-link depth check, but the second resolves outside.
         self.assertEqual(
-            self.root / "outside", (self.candidate / "dir" / "escape").resolve()
+            (self.root / "outside").resolve(),
+            (self.candidate / "dir" / "escape").resolve(),
         )
         with self.assertRaisesRegex(
             PatchTransitError, "symlink chain escapes checkout"
@@ -51,7 +52,8 @@ class SymlinkChainSafety(unittest.TestCase):
         result = inventory(self.candidate)
         self.assertEqual("up/file.txt", result["dir/alias"][1])
         self.assertEqual(
-            self.candidate / "file.txt", (self.candidate / "dir" / "alias").resolve()
+            (self.candidate / "file.txt").resolve(),
+            (self.candidate / "dir" / "alias").resolve(),
         )
 
     def test_cyclic_symlink_chain_is_rejected(self):
