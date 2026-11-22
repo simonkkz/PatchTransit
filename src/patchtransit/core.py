@@ -25,6 +25,7 @@ MAX_TREE_ENTRY_BYTES = 16384
 MAX_TREE_ENTRIES = 100_000
 MAX_FILE_BYTES = 512 * 1024**2
 MAX_DIFF_TEXT_BYTES = 2 * 1024**2
+MAX_DIFF_TEXT_LINES = 10_000
 MAX_INVENTORY_PREVIEW_BYTES = 64 * 1024**2
 MAX_DIFF_LINES = 16000
 MAX_DIFF_OUTPUT_BYTES = 8 * 1024**2
@@ -572,6 +573,11 @@ def _digest(value: tuple[str, bytes | str] | None) -> str | None:
     return sha256_bytes(b"symlink\x00" + data.encode("utf-8", "surrogateescape"))
 
 
+def _line_count(content: bytes) -> int:
+    """Count LF-framed text lines without allocating individual line objects."""
+    return content.count(b"\n") + int(bool(content) and not content.endswith(b"\n"))
+
+
 def _lf_lines(text: str) -> list[str]:
     """Split on LF only; str.splitlines() also splits valid text at VT/FF/NEL."""
     parts = text.split("\n")
@@ -686,14 +692,20 @@ def compare_inventories(
         aa = a[1] if a else b""
         bb = b[1] if b else b""
         assert isinstance(aa, bytes) and isinstance(bb, bytes)
-        if (
+        unsupported_bytes = (
             len(aa) > MAX_DIFF_TEXT_BYTES
             or len(bb) > MAX_DIFF_TEXT_BYTES
             or b"\x00" in aa
             or b"\x00" in bb
-        ):
+        )
+        excessive_lines = (
+            _line_count(aa) > MAX_DIFF_TEXT_LINES
+            or _line_count(bb) > MAX_DIFF_TEXT_LINES
+        )
+        if unsupported_bytes or excessive_lines:
+            reason = "binary/large" if unsupported_bytes else "high-line-count"
             append_diff(
-                f"--- {_git_path(filename)}: binary/large contents differ (hashes in JSON)\n"
+                f"--- {_git_path(filename)}: {reason} contents differ (hashes in JSON)\n"
             )
             continue
         try:
@@ -754,7 +766,11 @@ def _preview_complete(
                 return False
             contents = state[1]
             assert isinstance(contents, bytes)
-            if len(contents) > MAX_DIFF_TEXT_BYTES or b"\x00" in contents:
+            if (
+                len(contents) > MAX_DIFF_TEXT_BYTES
+                or b"\x00" in contents
+                or _line_count(contents) > MAX_DIFF_TEXT_LINES
+            ):
                 return False
             try:
                 contents.decode("utf-8")
