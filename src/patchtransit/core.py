@@ -79,6 +79,8 @@ def run(
     # Anonymous temporary files also prevent pipe inheritance from stalling
     # the parent if a command launches a descendant with the same handles.
     timeout_seconds = _timeout_seconds(timeout)
+    if cwd is not None and not os.path.isdir(cwd):
+        raise PatchTransitError(f"Working directory is not a directory: {cwd}")
     if args and args[0] == "git" and env is None:
         env = _git_env()
     try:
@@ -135,9 +137,19 @@ def run(
             return subprocess.CompletedProcess(
                 args, returncode, stdout.read(), stderr.read()
             )
-    except FileNotFoundError as exc:
-        raise PatchTransitError(f"Required executable not found: {args[0]}") from exc
     except OSError as exc:
+        if (
+            cwd is not None
+            and isinstance(exc, (FileNotFoundError, NotADirectoryError))
+            and not os.path.isdir(cwd)
+        ):
+            raise PatchTransitError(
+                f"Working directory is not a directory: {cwd}"
+            ) from exc
+        if isinstance(exc, FileNotFoundError):
+            raise PatchTransitError(
+                f"Required executable not found: {args[0]}"
+            ) from exc
         raise PatchTransitError(f"Cannot run executable {args[0]}: {exc}") from exc
 
 
