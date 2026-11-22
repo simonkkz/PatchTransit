@@ -25,7 +25,8 @@ def atomic_write(path: pathlib.Path, contents: str) -> None:
     # after adding a long prefix, random suffix and extension.
     fd, tmp = tempfile.mkstemp(prefix=".patchtransit-", suffix=".tmp", dir=path.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as output:
+        # Git patches are LF-framed even when generated on Windows.
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as output:
             output.write(contents)
             output.flush()
             os.fsync(output.fileno())
