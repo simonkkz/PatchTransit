@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Inspect all patch paths regardless of the caller's working directory, including unsafe paths outside a nested Git prefix.
 ## 1.0.0
 
 - Stabilize the documented CLI, Python evidence API and schema-1 compatibility contract under Semantic Versioning.

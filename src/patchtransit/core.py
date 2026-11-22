@@ -545,7 +545,11 @@ def _patch_numstat(
     if reverse:
         command.append("--reverse")
     command.extend(("--numstat", "-z", "--", str(filename.absolute())))
-    result = run(command)
+    # Git skips paths outside the current directory's repository prefix.
+    with tempfile.TemporaryDirectory(prefix="patchtransit-numstat-") as sandbox:
+        environment = _git_env()
+        environment["GIT_CEILING_DIRECTORIES"] = sandbox
+        result = run(command, cwd=pathlib.Path(sandbox), env=environment)
     if result.returncode:
         raise PatchTransitError(
             "Invalid patch syntax: " + result.stderr.decode("utf-8", "replace")[:600]
