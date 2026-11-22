@@ -30,7 +30,12 @@ Releases = "https://github.com/simonkkz/PatchTransit/releases"
 Changelog = "https://github.com/simonkkz/PatchTransit/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-dev = ["ruff==0.17.6", "pyrefly==1.5.0", "build==1.6.1"]
+dev = [
+    "ruff==0.17.6",
+    "pyrefly==1.5.0",
+    "build==1.6.1",
+    "jsonschema==4.26.0",
+]
 
 [project.scripts]
 patchtransit = "patchtransit.cli:main"
