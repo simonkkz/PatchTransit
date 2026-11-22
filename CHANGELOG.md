@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 1.0.0
+
+- Stabilize the documented CLI, Python evidence API and schema-1 compatibility contract under Semantic Versioning.
 - Reject patches that touch more than the supported entry limit before applying them to candidate trees.
 - Enforce a deadline while streaming Git tree entries and blobs so a stuck subprocess cannot hang candidate export.
 - List each affected path once when inspecting an mbox with multiple commits that touch the same file.
