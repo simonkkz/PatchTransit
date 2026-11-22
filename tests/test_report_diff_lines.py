@@ -24,9 +24,9 @@ class ReportDiffLines(unittest.TestCase):
     def test_vertical_tab_form_feed_and_nel_remain_inside_diff_lines(self):
         diff = "@@ -1 +1 @@\n-old\vpart\n+new\fpart\n+title\u0085text\n"
         markup = html_report(self.result(diff))
-        self.assertIn('<span class="removed">-old\vpart</span>', markup)
-        self.assertIn('<span class="added">+new\fpart</span>', markup)
-        self.assertIn('<span class="added">+title\u0085text</span>', markup)
+        self.assertIn(r'<span class="removed">-old\x0bpart</span>', markup)
+        self.assertIn(r'<span class="added">+new\x0cpart</span>', markup)
+        self.assertIn(r'<span class="added">+title\x85text</span>', markup)
 
     def test_empty_diff_shows_empty_state(self):
         markup = html_report(self.result(""))

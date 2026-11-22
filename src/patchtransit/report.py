@@ -8,6 +8,7 @@ import os
 import pathlib
 import re
 import tempfile
+import unicodedata
 from collections.abc import Mapping
 from typing import Any
 
@@ -48,17 +49,21 @@ def json_report(result: Mapping[str, Any]) -> str:
 
 def html_report(result: Mapping[str, Any]) -> str:
     def e(value: object) -> str:
-        # Invalid UTF-8 bytes from POSIX filenames cannot be embedded directly
-        # in an HTML document. Display them as explicit, reversible escapes.
-        display = "".join(
-            f"\\x{ord(char) - 0xDC00:02x}"
-            if 0xDC80 <= ord(char) <= 0xDCFF
-            else f"\\u{ord(char):04x}"
-            if 0xD800 <= ord(char) <= 0xDFFF
-            else char
-            for char in str(value)
-        )
-        return html.escape(display, quote=True)
+        # Preserve readable text while making invisible formatting, control
+        # and undecodable pathname bytes explicit in forensic HTML evidence.
+        def safe_char(char: str) -> str:
+            point = ord(char)
+            if 0xDC80 <= point <= 0xDCFF:
+                return f"\\x{point - 0xDC00:02x}"
+            if unicodedata.category(char) in ("Cc", "Cf", "Cs", "Zl", "Zp"):
+                if point <= 0xFF:
+                    return f"\\x{point:02x}"
+                if point <= 0xFFFF:
+                    return f"\\u{point:04x}"
+                return f"\\U{point:08x}"
+            return char
+
+        return html.escape("".join(safe_char(c) for c in str(value)), quote=True)
 
     badge = e(result["verdict"]).upper()
     if result["verdict"] == "regression":
