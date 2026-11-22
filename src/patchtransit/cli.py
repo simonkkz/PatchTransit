@@ -235,6 +235,12 @@ def _validate_outputs(args: argparse.Namespace) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
+        args.repo = args.repo.expanduser()
+        if args.action == "compare":
+            args.old = args.old.expanduser()
+            args.new = args.new.expanduser()
+        else:
+            args.patch = args.patch.expanduser()
         _validate_outputs(args)
         if args.action == "inspect":
             result = inspect_patch(args.patch.resolve())
