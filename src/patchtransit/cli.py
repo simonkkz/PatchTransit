@@ -98,6 +98,10 @@ def _validate_outputs(args: argparse.Namespace) -> None:
         if output is None:
             continue
         destination = resolve_output_path(output)
+        # Report destinations should never alter Git's control files or refs,
+        # even if a caller accidentally requests --json .git/config.
+        if any(part.casefold() == ".git" for part in destination.parts):
+            raise PatchTransitError(f"--{flag} cannot target a .git control path")
         if destination in source_paths:
             raise PatchTransitError(f"--{flag} would overwrite an input patch")
         if previous := seen.get(destination):
