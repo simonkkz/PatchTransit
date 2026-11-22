@@ -1,11 +1,11 @@
 # PatchTransit
 
-[![Tests](https://img.shields.io/github/actions/workflow/status/simonkkz/PatchTransit/ci.yml?branch=main&label=tests)](https://github.com/simonkkz/PatchTransit/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/codecov/c/github/simonkkz/PatchTransit?label=coverage&logo=codecov)](https://codecov.io/gh/simonkkz/PatchTransit)
-[![Release](https://img.shields.io/github/v/release/simonkkz/PatchTransit?sort=semver&label=release)](https://github.com/simonkkz/PatchTransit/releases/latest)
-[![Documentation](https://img.shields.io/website?url=https%3A%2F%2Fsimonkkz.github.io%2FPatchTransit%2F&label=docs)](https://simonkkz.github.io/PatchTransit/)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB)](https://www.python.org/)
-[![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Tests](https://github.com/simonkkz/PatchTransit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/simonkkz/PatchTransit/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/simonkkz/PatchTransit?label=coverage&logo=codecov&logoColor=white)](https://codecov.io/gh/simonkkz/PatchTransit)
+[![Release](https://img.shields.io/github/v/release/simonkkz/PatchTransit?sort=semver&label=release&logo=github&logoColor=white&color=8B5CF6)](https://github.com/simonkkz/PatchTransit/releases/latest)
+[![Docs](https://img.shields.io/badge/docs-website-0D9488?logo=readthedocs&logoColor=white)](https://simonkkz.github.io/PatchTransit/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![MIT](https://img.shields.io/badge/license-MIT-D5A021?logo=opensourceinitiative&logoColor=white)](LICENSE)
 
 **See what changed between two revisions of a patch — in the resulting code, not just in the patch text.**
 
