@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Preflight compressed Git binary patch sizes, including delta output sizes, before Git can inflate oversized candidate files.
 - Clear inherited `GIT_*` overrides from optional verification commands, preventing accidental Git operations against the caller’s repository instead of a candidate.
 ## 0.1.4 — direct patch integrity and report safety
 
