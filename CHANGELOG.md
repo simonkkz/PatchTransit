@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Provide a cross-platform Python example script (`examples/demo.py`) with a configurable report directory, retaining the Bash shortcut and documenting Windows PowerShell quickstart commands.
 ## 0.1.2 — evidence contracts, compatibility and safety
 
 - Publish a versioned JSON Schema for comparison evidence on GitHub Pages, with automated validation against current and legacy schema-1 reports.

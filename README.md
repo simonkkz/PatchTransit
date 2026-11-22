@@ -44,8 +44,15 @@ python -m venv .venv
 python -m pip install -e .
 
 # Generate a tiny, temporary example repository and report:
-bash examples/demo.sh
+python examples/demo.py
 ```
+
+The Python demo works on Linux, macOS and Windows. For Windows PowerShell,
+use `py -m venv .venv`, `.\.venv\Scripts\Activate.ps1`, then
+`python -m pip install -e .` and `python examples/demo.py`. The original
+`bash examples/demo.sh` shortcut remains supported on Unix. To place demo
+reports outside the checkout, pass `--output-dir /path/to/reports` (or a
+Windows directory path).
 
 For your own repository:
 
@@ -155,7 +162,7 @@ ruff check src tests
 ruff format --check src tests
 pyrefly check
 python -m unittest discover -s tests -v
-bash examples/demo.sh
+python examples/demo.py
 ```
 
 Python standard library + Git only. See [CONTRIBUTING.md](CONTRIBUTING.md).
