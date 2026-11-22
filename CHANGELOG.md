@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Snapshot direct Python API patch inputs before validating and applying them so later source mutations cannot bypass preflight.
 - Expand quoted home-directory (`~/`) paths consistently for CLI patch inputs and repository paths, as with report outputs.
 - Reject parent/child report output paths before writing any artifact, including case aliases and directory symlinks.
 - Ignore global Git `core.symlinks=false` when applying candidate patches, preserving symlink kind and state hashes across environments.

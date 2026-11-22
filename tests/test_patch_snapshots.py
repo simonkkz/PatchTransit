@@ -56,6 +56,30 @@ class ImmutablePatchInputs(unittest.TestCase):
         self.assertIn("+first revision", result["effective_diff"])
         self.assertNotIn("second revision", result["effective_diff"])
 
+    def test_direct_apply_uses_preflighted_patch_bytes_after_source_mutates(self):
+        self.source.write_text("first revision\n", encoding="utf-8")
+        original_bytes = self.git("diff", "--binary")
+        self.source.write_text("second revision\n", encoding="utf-8")
+        replacement = self.git("diff", "--binary")
+        external = self.root / "patch.diff"
+        external.write_bytes(original_bytes)
+        candidate = self.root / "candidate"
+        candidate.mkdir()
+        (candidate / "file.txt").write_text("base\n", encoding="utf-8")
+        original_preflight = core.patch_metadata
+
+        def mutate_after_preflight(path: Path):
+            result = original_preflight(path)
+            external.write_bytes(replacement)
+            return result
+
+        with patch(
+            "patchtransit.core.patch_metadata", side_effect=mutate_after_preflight
+        ):
+            core.apply_patch(candidate, external)
+        self.assertEqual("first revision\n", (candidate / "file.txt").read_text())
+        self.assertEqual(replacement, external.read_bytes())
+
     def test_patch_metadata_streams_instead_of_loading_complete_patch(self):
         self.source.write_text("change\n", encoding="utf-8")
         external = self.root / "patch.diff"
