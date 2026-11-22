@@ -3,6 +3,7 @@
 ## 0.1.1 — maintenance and quality checks
 
 - Canonicalize whole-tree fingerprints across inline/filehash representations and avoid false changes when those representations differ.
+- Disable lazy Git object fetching during base ref resolution and reject missing trees locally in partial clones.
 - Cap committed and patched candidate trees at 100,000 entries, including zero-byte files that do not consume the aggregate byte budget.
 - Reject Windows COM/LPT device aliases containing superscript digits ¹, ² and ³ in Git paths and symlink targets.
 - Require regular patch inputs, reject FIFOs/devices without blocking, precheck declared sizes, and snapshot inputs in standalone inspection.
