@@ -2,10 +2,13 @@
 
 ## Unreleased
 
+## 0.1.5 — verification isolation and safety limits
+
 - Reap the Git tree reader and close its pipes if the blob reader fails to start.
 - Preflight compressed Git binary patch sizes, including delta output sizes, before Git can inflate oversized candidate files.
 - Set `PWD` to each temporary candidate for optional verification commands instead of inheriting the caller’s working directory.
 - Clear inherited `GIT_*` overrides from optional verification commands, preventing accidental Git operations against the caller’s repository instead of a candidate.
+
 ## 0.1.4 — direct patch integrity and report safety
 
 - Snapshot direct Python API patch inputs before validating and applying them so later source mutations cannot bypass preflight.
