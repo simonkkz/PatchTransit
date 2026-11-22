@@ -1,8 +1,11 @@
 # PatchTransit
 
-[![Tests](https://github.com/simonkkz/PatchTransit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/simonkkz/PatchTransit/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-5B8CFF)](LICENSE)
+[![Tests](https://img.shields.io/github/actions/workflow/status/simonkkz/PatchTransit/ci.yml?branch=main&label=tests)](https://github.com/simonkkz/PatchTransit/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/simonkkz/PatchTransit?label=coverage&logo=codecov)](https://codecov.io/gh/simonkkz/PatchTransit)
+[![Release](https://img.shields.io/github/v/release/simonkkz/PatchTransit?sort=semver&label=release)](https://github.com/simonkkz/PatchTransit/releases/latest)
+[![Documentation](https://img.shields.io/website?url=https%3A%2F%2Fsimonkkz.github.io%2FPatchTransit%2F&label=docs)](https://simonkkz.github.io/PatchTransit/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB)](https://www.python.org/)
+[![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 **See what changed between two revisions of a patch — in the resulting code, not just in the patch text.**
 
@@ -148,10 +151,6 @@ See [SECURITY.md](SECURITY.md) for threat model and disclosure instructions.
 ## Why not `git range-diff`?
 
 [`git range-diff`](https://git-scm.com/docs/git-range-diff) compares **commit series** and is the right tool for iterative commit review. PatchTransit focuses on two standalone `.patch` files applied to a common base, compares their **complete resulting file trees**, and optionally executes the same verification command against each result. It complements rather than replaces Git.
-
-## Continuous integration and maintenance
-
-GitHub Actions runs Ruff lint/format, strict Pyrefly type checks on `src/`, and integration tests on Linux, macOS and Windows across Python 3.11–3.15. The Linux/Python 3.15 matrix job also builds wheel and source distributions and smoke-tests the wheel in a fresh virtual environment. A separate workflow measures branch coverage on `main`, saves the XML report as a GitHub Actions artifact, and attempts an OIDC-authenticated upload to Codecov. Codecov outages do not block the test matrix. Renovate configuration in `renovate.json` tracks Python dev tool versions and GitHub Actions; automated update PRs require enabling the Renovate GitHub App for the repository.
 
 ## Development
 
