@@ -614,9 +614,14 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
 
 
 def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
-    if patch is not None:
+    if patch is None:
+        return
+    with tempfile.TemporaryDirectory(prefix="patchtransit-apply-") as sandbox:
+        snapshot = _snapshot_patch(
+            patch.absolute(), pathlib.Path(sandbox) / "input.patch"
+        )
         try:
-            patch_metadata(patch.absolute())
+            patch_metadata(snapshot)
         except PatchTransitError as exc:
             message = str(exc)
             if message.startswith("Invalid patch syntax: "):
@@ -625,7 +630,7 @@ def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
                     + message.removeprefix("Invalid patch syntax: ")
                 ) from exc
             raise
-    _apply_preflighted_patch(path, patch)
+        _apply_preflighted_patch(path, snapshot)
 
 
 def _apply_preflighted_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
