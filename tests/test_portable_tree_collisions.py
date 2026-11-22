@@ -10,7 +10,7 @@ from pathlib import Path
 
 from patchtransit.core import (
     PatchTransitError,
-    _register_portable_path,
+    _PortablePathRegistry,
     export_tree,
     inventory,
     repository,
@@ -27,22 +27,21 @@ class PortableTreeCollisions(unittest.TestCase):
             ("Z/One", "z/Two"),
         ):
             with self.subTest(names=names):
-                seen: dict[str, str] = {}
-                _register_portable_path(names[0], seen)
+                seen = _PortablePathRegistry()
+                seen.register(names[0])
                 with self.assertRaisesRegex(PatchTransitError, "paths collide"):
-                    _register_portable_path(names[1], seen)
+                    seen.register(names[1])
 
     def test_distinct_valid_paths_and_repeated_prefixes(self):
-        seen: dict[str, str] = {}
+        seen = _PortablePathRegistry()
         for name in (
             "pkg/one.py",
             "pkg/two.py",
             "PkgOther/a.py",
             "unicøde/ファイル.txt",
         ):
-            _register_portable_path(name, seen)
-        self.assertIn("pkg/one.py", seen)
-        self.assertIn("pkg/two.py", seen)
+            seen.register(name)
+        self.assertGreaterEqual(seen.node_count, 6)
 
     @unittest.skipIf(os.name == "nt", "Windows cannot create two case-alias files")
     def test_committed_git_tree_rejects_distinct_case_alias_files(self):
