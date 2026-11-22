@@ -20,6 +20,12 @@ class WindowsPathSafety(unittest.TestCase):
             "dir/con.txt",
             "dir/NUL",
             "dir/LPT1.txt",
+            "dir/COM¹",
+            "dir/com².txt",
+            "dir/COM³.log",
+            "dir/lpt¹",
+            "dir/LPT².txt",
+            "dir/lpt³.log",
             "trailing./file.txt",
             "name. ",
         ):
@@ -33,6 +39,8 @@ class WindowsPathSafety(unittest.TestCase):
             r"..\..\..\outside.txt",
             r"\\server\share\secret.txt",
             "../CON",
+            "../COM¹",
+            "../LPT².log",
             "link:alternate",
         ):
             with self.subTest(name=name), self.assertRaises(PatchTransitError):
@@ -46,6 +54,8 @@ class WindowsPathSafety(unittest.TestCase):
             r"nested\outside.txt",
             "nested/.GiT/config",
             "nested/COM3",
+            "nested/COM³.txt",
+            "nested/LPT¹",
             "nested/file.txt:stream",
             "nested/trailing.",
         ):
