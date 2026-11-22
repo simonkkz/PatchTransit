@@ -526,6 +526,14 @@ def _patch_numstat(
     return entries
 
 
+_GITLINK_MODE_LINE = re.compile(
+    rb"(?:"
+    rb"(?:old|new|new file|deleted file) mode 160000"
+    rb"|index [0-9a-fA-F]{1,64}\.\.[0-9a-fA-F]{1,64} 160000"
+    rb")\r?"
+)
+
+
 def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
     if filename is None:
         return {
@@ -539,6 +547,19 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
     digest = hashlib.sha256()
     size = hunks = 0
     prefix = b""
+    in_header = False
+
+    def inspect_line(line: bytes) -> None:
+        nonlocal hunks, in_header
+        if line.startswith(b"diff --git "):
+            in_header = True
+        elif line.startswith((b"@@ ", b"GIT binary patch", b"Binary files ")):
+            in_header = False
+        elif in_header and _GITLINK_MODE_LINE.fullmatch(line):
+            raise PatchTransitError("Git submodules are unsupported in patches")
+        if line.startswith(b"@@ "):
+            hunks += 1
+
     try:
         with _regular_patch_stream(filename) as source:
             while block := source.read(64 * 1024):
@@ -546,16 +567,14 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
                 if size > MAX_ARCHIVE_BYTES:
                     raise PatchTransitError("Patch exceeds maximum accepted size")
                 digest.update(block)
-                # A patch is LF-framed even when its contents contain bare CRs.
+                # Retain only the header-length prefix of each LF-framed line.
                 fragments = block.split(b"\n")
                 for line in fragments[:-1]:
-                    if (prefix + line[: 3 - len(prefix)]) == b"@@ ":
-                        hunks += 1
+                    inspect_line(prefix + line[: 160 - len(prefix)])
                     prefix = b""
-                if len(prefix) < 3:
-                    prefix += fragments[-1][: 3 - len(prefix)]
-            if prefix == b"@@ ":
-                hunks += 1
+                prefix += fragments[-1][: 160 - len(prefix)]
+            if prefix:
+                inspect_line(prefix)
     except OSError as exc:
         raise PatchTransitError(f"Cannot read patch {filename}: {exc}") from exc
     if size == 0:

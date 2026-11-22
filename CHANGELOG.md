@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reject Git submodule (gitlink mode `160000`) patches before a working-tree application can silently ignore them and claim identical results.
 - Distinguish missing repository/working-directory paths from missing executables in subprocess failures.
 - Reject Windows-reserved punctuation in Git tree entries, patches and symlink targets on all hosts; reject C0 filename controls on Windows before filesystem access.
 - Apply patches with LF-preserving Git settings so global `core.autocrlf=true` cannot change candidate files or their hashes.
