@@ -533,6 +533,17 @@ def compare_inventories(
         b = right.get(filename)
         if a == b:
             continue
+        # The inventory may represent a file with inline bytes or a streamed
+        # digest. Those are storage choices, not effective file changes.
+        if (
+            a
+            and b
+            and a[0].startswith("file")
+            and b[0].startswith("file")
+            and a[0].endswith("+x") == b[0].endswith("+x")
+            and _digest(a) == _digest(b)
+        ):
+            continue
         state = "added" if a is None else "deleted" if b is None else "modified"
         changes.append(
             {
@@ -784,7 +795,11 @@ def evaluate(
             h = hashlib.sha256()
             for key, value in sorted(items.items()):
                 h.update(key.encode("utf-8", "surrogateescape") + b"\x00")
-                h.update(value[0].encode() + b"\x00")
+                # Filehash versus inline file bytes is an implementation
+                # choice controlled by the preview size limit, not a change
+                # in the underlying Git tree.
+                kind = value[0].replace("filehash", "file", 1)
+                h.update(kind.encode() + b"\x00")
                 h.update((_digest(value) or "").encode() + b"\n")
             return h.hexdigest()
 

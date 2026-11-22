@@ -110,6 +110,7 @@ Exit codes: `0` for successful comparison with no confirmed regression, `1` if t
 
 - The tool never executes the patch itself. The optional `--execute` runs a command in the patched tree and has **no OS sandbox**.
 - Reports contain code paths and **diff contents**. Inspect before sharing for proprietary source, personal data, or secrets.
+- Whole-tree SHA-256 fingerprints are based on each path, file type/mode and content digest; changing the text-preview threshold does not change the fingerprint of an identical tree.
 - The JSON records test exit codes, elapsed time and hashes of stdout/stderr. It intentionally does **not** copy raw test logs or environment variables into evidence. Command output is captured in temporary files and hashed in chunks rather than accumulated in process memory. Temporary files are deleted after each check, and each output stream has a 64 MiB safety cap.
 - Committed Git blobs are copied directly from the immutable tree with path, symlink, file-size and total-size checks. Git archive `export-ignore` attributes cannot silently omit tracked files. Git submodule entries are currently rejected explicitly, and missing blobs in partial clones cause a local error rather than a network fetch.
 - Patch paths undergo safety checks; Git itself validates whether a patch applies. Simple renames work; unusual multi-path encodings that cannot be parsed safely are rejected.
