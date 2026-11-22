@@ -196,6 +196,10 @@ def _portable_name(name: str) -> bool:
     if not name or "\\" in name or ":" in name or "\x00" in name:
         return False
     for component in pathlib.PurePosixPath(name).parts:
+        if any(char in '<>"|?*' for char in component):
+            return False
+        if os.name == "nt" and any(ord(char) < 32 for char in component):
+            return False
         if component in ("", ".", ".."):
             continue
         if (
