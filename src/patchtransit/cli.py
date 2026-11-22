@@ -7,6 +7,7 @@ import os
 import pathlib
 import shlex
 import sys
+import unicodedata
 from typing import Any
 
 from . import __version__
@@ -123,6 +124,25 @@ def _split_command(command: str) -> list[str]:
     return _split_windows_command(command) if os.name == "nt" else shlex.split(command)
 
 
+def _terminal_safe(value: object) -> str:
+    """Escape control, bidi-format and surrogate codepoints before printing."""
+    escaped: list[str] = []
+    for char in str(value):
+        point = ord(char)
+        if 0xDC80 <= point <= 0xDCFF:
+            escaped.append(f"\\x{point - 0xDC00:02x}")
+        elif unicodedata.category(char) in ("Cc", "Cf", "Cs", "Zl", "Zp"):
+            if point <= 0xFF:
+                escaped.append(f"\\x{point:02x}")
+            elif point <= 0xFFFF:
+                escaped.append(f"\\u{point:04x}")
+            else:
+                escaped.append(f"\\U{point:08x}")
+        else:
+            escaped.append(char)
+    return "".join(escaped)
+
+
 def _check_status(check: dict[str, Any]) -> str:
     if check.get("timeout"):
         return "timeout"
@@ -205,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"Files: {len(result['files'])}  Hunks: {result['hunks']}  Lines: +{result['added_lines']} -{result['removed_lines']}"
             )
             for name in result["files"]:
-                print(f"  {name}")
+                print(f"  {_terminal_safe(name)}")
             return 0
         if args.timeout <= 0:
             raise PatchTransitError("--timeout must be positive")
@@ -228,22 +248,23 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"Base tree: {outcome['base_tree']}")
         for item in outcome["changes"]:
-            print(f"  {item['change']:<8} {item['path']}")
+            print(f"  {item['change']:<8} {_terminal_safe(item['path'])}")
         if outcome.get("checks"):
             old_check = outcome["checks"]["old"]
             new_check = outcome["checks"]["new"]
             print(
-                f"Checks: old={_check_status(old_check)} new={_check_status(new_check)}"
+                f"Checks: old={_terminal_safe(_check_status(old_check))} "
+                f"new={_terminal_safe(_check_status(new_check))}"
             )
         if args.json:
             atomic_write(args.json, json_report(outcome))
-            print(f"JSON evidence: {args.json}")
+            print(f"JSON evidence: {_terminal_safe(args.json)}")
         if args.html:
             atomic_write(args.html, html_report(outcome))
-            print(f"HTML report: {args.html}")
+            print(f"HTML report: {_terminal_safe(args.html)}")
         if args.diff:
             atomic_write(args.diff, outcome["effective_diff"])
-            print(f"Effective diff preview: {args.diff}")
+            print(f"Effective diff preview: {_terminal_safe(args.diff)}")
             if not outcome.get("diff_preview_complete", True):
                 print(
                     "patchtransit: the diff preview omits some changes; "
@@ -252,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
         return 1 if outcome["verdict"] == "regression" else 0
     except (PatchTransitError, ValueError, OSError) as exc:
-        print(f"patchtransit: {exc}", file=sys.stderr)
+        print(f"patchtransit: {_terminal_safe(exc)}", file=sys.stderr)
         return 2
 
 
