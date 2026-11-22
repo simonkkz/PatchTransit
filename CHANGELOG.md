@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Publish a versioned JSON Schema for comparison evidence on GitHub Pages, with automated validation against current and legacy schema-1 reports.
+- Treat genuinely empty (zero-byte) Git patches as valid identity revisions in inspect/compare/verify, while rejecting malformed nonempty data and non-regular inputs.
 - Ship the PEP 561 `py.typed` marker inside source and wheel distributions so downstream type checkers can inspect the existing Python API annotations.
 - Define typed `PatchMetadata`, `ChangedFile`, `CommandEvidence`, `VerificationChecks` and `ComparisonEvidence` contracts for the existing JSON/Python API without changing the serialized evidence structure.
 - Reject FIFOs, Unix sockets, device nodes and other unsupported entries during candidate inventories instead of silently omitting them from comparison evidence.

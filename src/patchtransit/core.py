@@ -492,6 +492,18 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
                 hunks += 1
     except OSError as exc:
         raise PatchTransitError(f"Cannot read patch {filename}: {exc}") from exc
+    if size == 0:
+        # An empty Git diff is an identity patch. Git apply rejects a zero-byte
+        # input by default, so do not invoke it for this exact case. Nonempty
+        # garbage or whitespace-only data must still fail normal preflight.
+        return {
+            "sha256": digest.hexdigest(),
+            "bytes": 0,
+            "files": [],
+            "added_lines": 0,
+            "removed_lines": 0,
+            "hunks": 0,
+        }
     # Forward numstat names the target of a rename, hiding its source path.
     # Reverse numstat exposes the source, so inspect both directions. This
     # also prevents a safe-looking rename destination from hiding an unsafe
@@ -519,6 +531,11 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
 def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
     if patch is None:
         return
+    # Validate standalone use as well as evaluate()'s private snapshots.
+    # A FIFO may have st_size==0 but is not an empty regular Git patch.
+    with _regular_patch_stream(patch) as source:
+        if os.fstat(source.fileno()).st_size == 0:
+            return
     for action in ("--check", None):
         cmd = ["git", "apply", "--whitespace=nowarn"]
         if action:
