@@ -11,10 +11,12 @@ import hashlib
 import os
 import pathlib
 import re
+import stat
 import subprocess
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from typing import IO, Any
 
 MAX_ARCHIVE_BYTES = 2 * 1024**3
@@ -300,6 +302,30 @@ def _path_safe(filename: str) -> bool:
     )
 
 
+@contextmanager
+def _regular_patch_stream(filename: pathlib.Path) -> Generator[IO[bytes], None, None]:
+    """Open patch inputs without blocking on FIFOs or reading device streams."""
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    try:
+        descriptor = os.open(filename, flags)
+    except OSError as exc:
+        raise PatchTransitError(f"Cannot open patch {filename}: {exc}") from exc
+    try:
+        details = os.fstat(descriptor)
+        if not stat.S_ISREG(details.st_mode):
+            raise PatchTransitError(f"Patch input must be a regular file: {filename}")
+        if details.st_size > MAX_ARCHIVE_BYTES:
+            raise PatchTransitError("Patch exceeds maximum accepted size")
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1
+            yield stream
+    except OSError as exc:
+        raise PatchTransitError(f"Cannot read patch {filename}: {exc}") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
 def patch_metadata(filename: pathlib.Path | None) -> dict[str, Any]:
     if filename is None:
         return {
@@ -314,7 +340,7 @@ def patch_metadata(filename: pathlib.Path | None) -> dict[str, Any]:
     size = hunks = 0
     prefix = b""
     try:
-        with filename.open("rb") as source:
+        with _regular_patch_stream(filename) as source:
             while block := source.read(64 * 1024):
                 size += len(block)
                 if size > MAX_ARCHIVE_BYTES:
@@ -691,7 +717,10 @@ def _snapshot_patch(source: pathlib.Path, destination: pathlib.Path) -> pathlib.
     """Freeze patch bytes before parsing or applying them to either candidate."""
     try:
         size = 0
-        with source.open("rb") as original, destination.open("xb") as snapshot:
+        with (
+            _regular_patch_stream(source) as original,
+            destination.open("xb") as snapshot,
+        ):
             while block := original.read(1024 * 1024):
                 size += len(block)
                 if size > MAX_ARCHIVE_BYTES:
@@ -700,6 +729,13 @@ def _snapshot_patch(source: pathlib.Path, destination: pathlib.Path) -> pathlib.
     except OSError as exc:
         raise PatchTransitError(f"Cannot copy patch {source}: {exc}") from exc
     return destination
+
+
+def inspect_patch(source: pathlib.Path) -> dict[str, Any]:
+    """Inspect a single consistent snapshot rather than a mutable path."""
+    with tempfile.TemporaryDirectory(prefix="patchtransit-inspect-") as sandbox:
+        copy = _snapshot_patch(source, pathlib.Path(sandbox) / "input.patch")
+        return patch_metadata(copy)
 
 
 def evaluate(

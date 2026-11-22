@@ -9,7 +9,7 @@ import sys
 from typing import Any
 
 from . import __version__
-from .core import PatchTransitError, evaluate, patch_metadata
+from .core import PatchTransitError, evaluate, inspect_patch
 from .report import atomic_write, html_report, json_report, resolve_output_path
 
 
@@ -112,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         _validate_outputs(args)
         if args.action == "inspect":
-            result = patch_metadata(args.patch.resolve())
+            result = inspect_patch(args.patch.resolve())
             if args.json:
                 atomic_write(args.json, json_report(result))
             print(f"Patch SHA256 : {result['sha256']}")
