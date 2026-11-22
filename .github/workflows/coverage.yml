@@ -37,4 +37,4 @@ jobs:
           disable_search: true
           disable_telem: true
           use_oidc: true
-          fail_ci_if_error: false
+          fail_ci_if_error: true
