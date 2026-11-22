@@ -20,7 +20,9 @@ def resolve_output_path(path: pathlib.Path) -> pathlib.Path:
 def atomic_write(path: pathlib.Path, contents: str) -> None:
     path = resolve_output_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    # A valid 255-byte destination filename may not fit in another filename
+    # after adding a long prefix, random suffix and extension.
+    fd, tmp = tempfile.mkstemp(prefix=".patchtransit-", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as output:
             output.write(contents)
