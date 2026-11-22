@@ -2,6 +2,7 @@
 
 ## 0.1.1 — maintenance and quality checks
 
+- Enforce file, symlink and aggregate byte limits on resulting patched candidate trees, not only the original committed Git tree.
 - Validate symlinks introduced by patch application, not only those present in the base Git tree, before running optional commands.
 - Reject colliding report destinations and paths that would overwrite input patch files before producing outputs.
 - Snapshot patch inputs before inspection and application to keep SHA-256 evidence consistent even if source patch files change during an evaluation. Stream patch metadata instead of buffering entire patch inputs.
