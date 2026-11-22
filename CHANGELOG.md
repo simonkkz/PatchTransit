@@ -3,6 +3,7 @@
 ## 0.1.1 — maintenance and quality checks
 
 - Bound inline text candidate inventories to 64 MiB each and use streamed hashes beyond the preview budget without changing tree fingerprints or manifests.
+- Bound Git subprocess stdout/stderr captures to 16 MiB per stream while running, preventing unbounded `git apply --numstat` output from exhausting memory.
 - Canonicalize whole-tree fingerprints across inline/filehash representations and avoid false changes when those representations differ.
 - Disable lazy Git object fetching during base ref resolution and reject missing trees locally in partial clones.
 - Cap committed and patched candidate trees at 100,000 entries, including zero-byte files that do not consume the aggregate byte budget.

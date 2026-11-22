@@ -29,6 +29,7 @@ MAX_INVENTORY_PREVIEW_BYTES = 64 * 1024**2
 MAX_DIFF_LINES = 16000
 MAX_DIFF_OUTPUT_BYTES = 8 * 1024**2
 MAX_COMMAND_OUTPUT_BYTES = 64 * 1024**2
+MAX_GIT_CAPTURE_BYTES = 16 * 1024**2
 
 
 class PatchTransitError(Exception):
@@ -47,20 +48,67 @@ def run(
     input_data: bytes | None = None,
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
+    # Git output should not be held in unlimited subprocess.run buffers.
+    # Anonymous temporary files also prevent pipe inheritance from stalling
+    # the parent if a command launches a descendant with the same handles.
     try:
-        return subprocess.run(
-            args,
-            input=input_data,
-            capture_output=True,
-            cwd=cwd,
-            timeout=timeout,
-            env=env,
-            check=False,
-        )
+        with (
+            tempfile.TemporaryFile(mode="w+b") as stdout,
+            tempfile.TemporaryFile(mode="w+b") as stderr,
+            tempfile.TemporaryFile(mode="w+b") as stdin,
+        ):
+            if input_data is not None:
+                stdin.write(input_data)
+                stdin.seek(0)
+            with subprocess.Popen(
+                args,
+                cwd=cwd,
+                env=env,
+                stdin=stdin if input_data is not None else subprocess.DEVNULL,
+                stdout=stdout,
+                stderr=stderr,
+            ) as process:
+                deadline = time.monotonic() + timeout
+                while True:
+                    if (
+                        os.fstat(stdout.fileno()).st_size > MAX_GIT_CAPTURE_BYTES
+                        or os.fstat(stderr.fileno()).st_size > MAX_GIT_CAPTURE_BYTES
+                    ):
+                        if process.poll() is None:
+                            process.kill()
+                            process.wait()
+                        raise PatchTransitError(
+                            f"Command output exceeds safety limit: {args[0]}"
+                        )
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        if process.poll() is None:
+                            process.kill()
+                            process.wait()
+                        raise PatchTransitError(
+                            f"Command timed out ({timeout}s): {args[0]}"
+                        )
+                    try:
+                        returncode = process.wait(timeout=min(remaining, 0.1))
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+                if (
+                    os.fstat(stdout.fileno()).st_size > MAX_GIT_CAPTURE_BYTES
+                    or os.fstat(stderr.fileno()).st_size > MAX_GIT_CAPTURE_BYTES
+                ):
+                    raise PatchTransitError(
+                        f"Command output exceeds safety limit: {args[0]}"
+                    )
+            stdout.seek(0)
+            stderr.seek(0)
+            return subprocess.CompletedProcess(
+                args, returncode, stdout.read(), stderr.read()
+            )
     except FileNotFoundError as exc:
         raise PatchTransitError(f"Required executable not found: {args[0]}") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise PatchTransitError(f"Command timed out ({timeout}s): {args[0]}") from exc
+    except OSError as exc:
+        raise PatchTransitError(f"Cannot run executable {args[0]}: {exc}") from exc
 
 
 def git(args: list[str], cwd: pathlib.Path, *, timeout: int = 120) -> bytes:
