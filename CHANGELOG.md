@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Display control and bidirectional formatting characters as explicit escape sequences in HTML evidence, preventing misleading file path rendering.
+- Upload branch coverage to Codecov for pull requests, using OIDC for trusted branches and tokenless uploads for external forks.
 - Emit a separate Git diff header for every content-modified file, so an empty added/deleted file followed by a normal edit remains an applicable effective diff.
 - Preserve LF line endings in exported evidence files on Windows, especially the replayable effective diff.
 - Check portable Git path aliases with a bounded component trie instead of quadratic prefix-string normalization, including file/directory target collisions.
