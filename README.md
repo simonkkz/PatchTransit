@@ -81,6 +81,8 @@ A `regression` verdict means the old command exited successfully and the new com
 patchtransit inspect before.patch
 ```
 
+For rename patches, inspection includes both the original source path and the destination path. The added/removed line totals still describe the forward patch, not the reverse inspection pass. Both paths undergo the same portability and safety checks.
+
 ## What is actually compared?
 
 The output is determined by the full file state after applying each patch, not by subtraction of patch text. Executable permission changes are represented as mode metadata on platforms that preserve POSIX file modes; mode-only changes may not be observable on Windows filesystems. For every changed file, the JSON records the path, change type and SHA-256 digest of both versions. Plain UTF-8 changes, including file additions and deletions, appear as Git-applicable unified diffs. Binary/large-file changes are represented by their checksums rather than complete patches. The readable diff preview is capped at 16,000 output lines or 8 MiB. Text inputs with more than 10,000 lines on either side use hash-only evidence instead of constructing a potentially expensive line-by-line diff; the JSON `changes` manifest still includes **every** changed file. The JSON `diff_preview_complete` boolean indicates whether the preview represents all changes as an applicable text patch. If any binary, large, symlink, non-UTF-8 or truncated change is omitted, that flag is `false`; do not use an incomplete preview as a patch to replay the complete comparison.
