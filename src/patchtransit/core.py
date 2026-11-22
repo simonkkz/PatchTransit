@@ -23,6 +23,7 @@ MAX_ARCHIVE_BYTES = 2 * 1024**3
 MAX_SYMLINK_BYTES = 4096
 MAX_TREE_ENTRY_BYTES = 16384
 MAX_TREE_ENTRIES = 100_000
+MAX_TREE_PATH_BYTES = 64 * 1024**2
 MAX_FILE_BYTES = 512 * 1024**2
 MAX_DIFF_TEXT_BYTES = 2 * 1024**2
 MAX_DIFF_TEXT_LINES = 10_000
@@ -286,6 +287,7 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
     assert proc.stdin is not None and proc.stdout is not None
     total = 0
     count = 0
+    path_bytes = 0
     links: list[tuple[pathlib.Path, str]] = []
     try:
         for record in _nul_records(tree_proc.stdout):
@@ -293,6 +295,11 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
             if count > MAX_TREE_ENTRIES:
                 raise PatchTransitError("Git tree exceeds maximum entry count")
             heading, separator, path = record.partition(b"\t")
+            path_bytes += len(path)
+            if path_bytes > MAX_TREE_PATH_BYTES:
+                raise PatchTransitError(
+                    "Git tree exceeds cumulative pathname size limit"
+                )
             parts = heading.split(b" ")
             if not separator or len(parts) != 3:
                 raise PatchTransitError("Invalid Git tree entry")
@@ -517,6 +524,7 @@ def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
 def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
     items: dict[str, tuple[str, bytes | str]] = {}
     total_bytes = 0
+    path_bytes = 0
     preview_bytes = 0
 
     def fail_on_walk_error(error: OSError) -> None:
@@ -542,6 +550,11 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
                 raise PatchTransitError("Candidate tree exceeds maximum entry count")
             path = pathlib.Path(current) / name
             rel = path.relative_to(root).as_posix()
+            path_bytes += len(rel.encode("utf-8", "surrogateescape"))
+            if path_bytes > MAX_TREE_PATH_BYTES:
+                raise PatchTransitError(
+                    "Candidate tree exceeds cumulative pathname size limit"
+                )
             _member_path(rel)
             if path.is_symlink():
                 target = os.readlink(path)
