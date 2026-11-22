@@ -13,9 +13,16 @@ from collections.abc import Mapping
 from typing import Any
 
 
+def _expand_user_path(path: pathlib.Path) -> pathlib.Path:
+    try:
+        return path.expanduser()
+    except RuntimeError as exc:
+        raise ValueError(f"Cannot expand home directory in path: {path}") from exc
+
+
 def resolve_output_path(path: pathlib.Path) -> pathlib.Path:
     """Resolve the parent, not the final symlink that atomic write replaces."""
-    expanded = path.expanduser()
+    expanded = _expand_user_path(path)
     return expanded.parent.resolve() / expanded.name
 
 

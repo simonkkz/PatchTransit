@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Report an ordinary CLI error for `~user` paths whose home directory cannot be resolved, including report destinations.
+
 ## 0.1.5 — verification isolation and safety limits
 
 - Reap the Git tree reader and close its pipes if the blob reader fails to start.
