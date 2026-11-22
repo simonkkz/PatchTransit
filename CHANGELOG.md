@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reap Git subprocess descendants that inherit export pipes when the export deadline expires.
 - Inspect all patch paths regardless of the caller's working directory, including unsafe paths outside a nested Git prefix.
 ## 1.0.0
 

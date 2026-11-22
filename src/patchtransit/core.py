@@ -353,14 +353,43 @@ def export_tree(
     # Partial clones may lazily fetch missing blobs. Treat them as unavailable
     # instead of allowing Git to make an implicit network request.
     git_env = _git_env()
-    tree_proc = subprocess.Popen(
-        ["git", "ls-tree", "-r", "-z", "--full-tree", tree],
-        cwd=repo,
-        env=git_env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    if os.name == "nt":
+        from ._windows_job import WindowsJob
+
+        job = WindowsJob()
+    else:
+        job = None
+
+    def stop_group(process: subprocess.Popen[bytes]) -> None:
+        if job is None:
+            try:
+                # Negative PID addresses the private POSIX process group.
+                os.kill(-process.pid, 9)
+            except OSError:
+                pass
+        try:
+            if process.poll() is None:
+                process.kill()
+        except OSError:
+            pass
+
     try:
+        tree_proc = subprocess.Popen(
+            ["git", "ls-tree", "-r", "-z", "--full-tree", tree],
+            cwd=repo,
+            env=git_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=os.name != "nt",
+        )
+    except BaseException:
+        if job is not None:
+            job.close()
+        raise
+    proc: subprocess.Popen[bytes] | None = None
+    try:
+        if job is not None:
+            job.attach(tree_proc)
         proc = subprocess.Popen(
             ["git", "cat-file", "--batch"],
             cwd=repo,
@@ -368,28 +397,35 @@ def export_tree(
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            start_new_session=os.name != "nt",
         )
+        if job is not None:
+            job.attach(proc)
     except BaseException:
-        # A failed second launch must not leave ls-tree running or its pipes open.
-        if tree_proc.poll() is None:
-            tree_proc.kill()
+        if job is not None:
+            job.close()
+        stop_group(tree_proc)
         tree_proc.wait()
         for pipe in (tree_proc.stdout, tree_proc.stderr):
             if pipe is not None:
                 pipe.close()
+        if proc is not None:
+            stop_group(proc)
+            proc.wait()
+            for pipe in (proc.stdin, proc.stdout, proc.stderr):
+                if pipe is not None:
+                    pipe.close()
         raise
     expired = threading.Event()
 
     def stop_stalled_git() -> None:
         expired.set()
+        if job is not None:
+            job.close()
         for process in (tree_proc, proc):
-            try:
-                if process.poll() is None:
-                    process.kill()
-            except OSError:
-                pass
+            stop_group(process)
 
-    # Pipe reads can block before either process reaches wait(timeout=...).
+    # A descendant can keep a pipe open after the direct Git process exits.
     watchdog = threading.Timer(seconds, stop_stalled_git)
     watchdog.daemon = True
     watchdog.start()
@@ -492,11 +528,13 @@ def export_tree(
         raise
     finally:
         watchdog.cancel()
-        watchdog.join(timeout=1)
+        watchdog.join()
+        if job is not None:
+            job.close()
         for process in (tree_proc, proc):
             if process.poll() is None:
-                process.kill()
-                process.wait()
+                stop_group(process)
+            process.wait()
             for pipe in (process.stdin, process.stdout, process.stderr):
                 if pipe and not pipe.closed:
                     pipe.close()
