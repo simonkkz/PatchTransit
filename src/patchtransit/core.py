@@ -16,6 +16,7 @@ import re
 import stat
 import subprocess
 import tempfile
+import threading
 import time
 import unicodedata
 import zlib
@@ -344,8 +345,11 @@ def _nul_records(stream: IO[bytes]) -> Iterator[bytes]:
         raise PatchTransitError("Truncated Git tree listing")
 
 
-def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
+def export_tree(
+    repo: pathlib.Path, tree: str, target: pathlib.Path, *, timeout: int = 120
+) -> None:
     """Copy exact tracked Git blobs into a bounded temporary candidate tree."""
+    seconds = min(_timeout_seconds(timeout), threading.TIMEOUT_MAX)
     # Partial clones may lazily fetch missing blobs. Treat them as unavailable
     # instead of allowing Git to make an implicit network request.
     git_env = _git_env()
@@ -374,6 +378,21 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
             if pipe is not None:
                 pipe.close()
         raise
+    expired = threading.Event()
+
+    def stop_stalled_git() -> None:
+        expired.set()
+        for process in (tree_proc, proc):
+            try:
+                if process.poll() is None:
+                    process.kill()
+            except OSError:
+                pass
+
+    # Pipe reads can block before either process reaches wait(timeout=...).
+    watchdog = threading.Timer(seconds, stop_stalled_git)
+    watchdog.daemon = True
+    watchdog.start()
     assert tree_proc.stdout is not None
     assert proc.stdin is not None and proc.stdout is not None
     total = 0
@@ -465,7 +484,15 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
         # link that has not yet been materialized when the first one is added.
         for destination, _ in links:
             _safe_resolved_symlink(target, destination)
+        if expired.is_set():
+            raise PatchTransitError("Git tree export timed out")
+    except (OSError, PatchTransitError, subprocess.TimeoutExpired) as exc:
+        if expired.is_set() or isinstance(exc, subprocess.TimeoutExpired):
+            raise PatchTransitError("Git tree export timed out") from exc
+        raise
     finally:
+        watchdog.cancel()
+        watchdog.join(timeout=1)
         for process in (tree_proc, proc):
             if process.poll() is None:
                 process.kill()
