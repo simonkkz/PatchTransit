@@ -21,6 +21,7 @@ class HyphenPrefixedPatchPaths(unittest.TestCase):
             ("init", "-q"),
             ("config", "user.name", "Fixture"),
             ("config", "user.email", "fixture@example.invalid"),
+            ("config", "core.autocrlf", "false"),
         ):
             self.git(*args)
         self.source = self.repo / "source.txt"
