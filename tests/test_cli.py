@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -112,6 +113,9 @@ class CliBehavior(unittest.TestCase):
         self.assertEqual(2, code)
         self.assertIn("Empty --command", err)
 
+    @unittest.skipIf(
+        os.name == "nt", "Windows CRT treats unmatched quotes as literal grouping"
+    )
     def test_handles_unbalanced_command_quote(self):
         code, _, err = self.verify("--execute", "--command", "'")
         self.assertEqual(2, code)
@@ -134,7 +138,12 @@ class CliBehavior(unittest.TestCase):
             "import pathlib,sys;sys.exit("
             'pathlib.Path("app.py").read_text().strip() != "value=1")'
         )
-        command = shlex.join((sys.executable, "-c", code_string))
+        arguments = (sys.executable, "-c", code_string)
+        command = (
+            subprocess.list2cmdline(arguments)
+            if os.name == "nt"
+            else shlex.join(arguments)
+        )
         code, out, err = self.verify("--execute", "--command", command)
         self.assertEqual((1, ""), (code, err))
         self.assertIn("REGRESSION", out)
@@ -145,7 +154,12 @@ class CliBehavior(unittest.TestCase):
             "import pathlib,sys;sys.exit("
             'pathlib.Path("app.py").read_text().strip() != "value=2")'
         )
-        command = shlex.join((sys.executable, "-c", code_string))
+        arguments = (sys.executable, "-c", code_string)
+        command = (
+            subprocess.list2cmdline(arguments)
+            if os.name == "nt"
+            else shlex.join(arguments)
+        )
         code, out, err = self.verify("--execute", "--command", command)
         self.assertEqual((0, ""), (code, err))
         self.assertIn("IMPROVEMENT", out)
