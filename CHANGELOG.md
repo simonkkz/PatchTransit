@@ -2,6 +2,7 @@
 
 ## 0.1.1 — maintenance and quality checks
 
+- Reject CLI report paths inside `.git` control directories, protecting repository configuration, index and refs from accidental overwrite.
 - Isolate internal Git processes from inherited `GIT_*` overrides, preventing foreign worktree/index/object paths from silently changing which repository is inspected.
 - Use constant-length temporary filenames for atomic reports so long valid output names do not exceed filesystem `NAME_MAX`.
 - Fail explicitly on candidate directory enumeration errors instead of silently omitting inaccessible files from evidence.
