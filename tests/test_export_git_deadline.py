@@ -93,21 +93,35 @@ class GitExportDeadline(unittest.TestCase):
 
     def test_other_git_parse_errors_remain_distinct_from_timeouts(self):
         original_popen = subprocess.Popen
+        children: list[subprocess.Popen[bytes]] = []
 
         def launch(argv: list[str], **kwargs):
+            # Mock both Git children outside the disposable test repo. On
+            # Windows a process using that repo as its cwd can block cleanup.
+            kwargs["cwd"] = Path.cwd()
             if argv[:2] == ["git", "ls-tree"]:
                 argv = [
                     sys.executable,
                     "-c",
                     "import sys;sys.stdout.buffer.write(b'invalid\\x00')",
                 ]
-            return original_popen(argv, **kwargs)
+            elif argv[:2] == ["git", "cat-file"]:
+                argv = [sys.executable, "-c", "import time; time.sleep(10)"]
+            process = original_popen(argv, **kwargs)
+            children.append(process)
+            return process
 
         with (
             patch("patchtransit.core.subprocess.Popen", side_effect=launch),
             self.assertRaisesRegex(PatchTransitError, "Invalid Git tree entry"),
         ):
             export_tree(self.repo, self.tree, self.root / "out", timeout=3)
+        self.assertEqual(2, len(children))
+        for child in children:
+            self.assertIsNotNone(child.poll())
+            for pipe in (child.stdin, child.stdout, child.stderr):
+                if pipe is not None:
+                    self.assertTrue(pipe.closed)
 
     @unittest.skipIf(sys.platform == "win32", "Windows symlink creation is restricted")
     def test_deadline_also_bounds_symlink_validation(self):
