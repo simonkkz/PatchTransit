@@ -56,6 +56,18 @@ class ImmutablePatchInputs(unittest.TestCase):
         self.assertIn("+first revision", result["effective_diff"])
         self.assertNotIn("second revision", result["effective_diff"])
 
+    def test_direct_apply_without_patch_preserves_candidate(self):
+        candidate = self.root / "candidate"
+        candidate.mkdir()
+        target = candidate / "file.txt"
+        target.write_text("original\n", encoding="utf-8")
+        with patch(
+            "patchtransit.core._snapshot_patch",
+            side_effect=AssertionError("No snapshot needed without patch input"),
+        ):
+            core.apply_patch(candidate, None)
+        self.assertEqual("original\n", target.read_text(encoding="utf-8"))
+
     def test_direct_apply_uses_preflighted_patch_bytes_after_source_mutates(self):
         self.source.write_text("first revision\n", encoding="utf-8")
         original_bytes = self.git("diff", "--binary")
