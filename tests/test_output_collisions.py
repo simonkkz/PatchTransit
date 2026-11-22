@@ -65,6 +65,32 @@ class ReportOutputCollisions(unittest.TestCase):
         self.assertEqual(2, code)
         self.assertIn("same output path", error)
 
+    def test_casefold_output_collisions_are_rejected_before_writing(self):
+        upper = self.root / "Evidence.JSON"
+        lower = self.root / "evidence.json"
+        code, error = self.invoke("--json", str(upper), "--html", str(lower))
+        self.assertEqual(2, code)
+        self.assertIn("same output path", error)
+        self.assertFalse(upper.exists())
+        self.assertFalse(lower.exists())
+
+    def test_unicode_normalization_output_collisions_are_rejected(self):
+        composed = self.root / "caf\u00e9.json"
+        decomposed = self.root / "cafe\u0301.json"
+        code, error = self.invoke("--json", str(composed), "--diff", str(decomposed))
+        self.assertEqual(2, code)
+        self.assertIn("same output path", error)
+        self.assertFalse(composed.exists())
+        self.assertFalse(decomposed.exists())
+
+    def test_input_patch_case_alias_cannot_be_a_report_destination(self):
+        original = self.patch.read_bytes()
+        alias = self.root / "INPUT.PATCH"
+        code, error = self.invoke("--json", str(alias))
+        self.assertEqual(2, code)
+        self.assertIn("overwrite an input patch", error)
+        self.assertEqual(original, self.patch.read_bytes())
+
     def test_inspect_cannot_overwrite_input_patch(self):
         original = self.patch.read_bytes()
         code, error = self.invoke("--json", str(self.patch), action="inspect")

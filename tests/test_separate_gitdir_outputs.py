@@ -85,6 +85,15 @@ class SeparateGitDirOutputSafety(unittest.TestCase):
         self.assertIn("Git control path", error)
         self.assertEqual(original, config.read_bytes())
 
+    def test_gitdir_case_alias_cannot_bypass_output_protection(self):
+        config = self.metadata / "config"
+        original = config.read_bytes()
+        alias = self.metadata.with_name(self.metadata.name.upper()) / "config"
+        code, error = self.cli("verify", alias)
+        self.assertEqual(2, code)
+        self.assertIn("Git control path", error)
+        self.assertEqual(original, config.read_bytes())
+
     def test_index_cannot_be_overwritten(self):
         index = self.metadata / "index"
         original = index.read_bytes()

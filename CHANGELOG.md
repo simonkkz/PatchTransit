@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Ignore global Git `core.symlinks=false` when applying candidate patches, preserving symlink kind and state hashes across environments.
+- Reject report destinations that alias input patches, other outputs or separate Git directories by case or Unicode normalization on portable filesystems.
 ## 0.1.3 — patch fidelity and cross-platform safety
 
 - Reject Git submodule (gitlink mode `160000`) patches in both comparisons and direct patch application before Git can silently ignore their tracked entries.
