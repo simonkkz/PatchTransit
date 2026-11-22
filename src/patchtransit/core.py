@@ -353,6 +353,7 @@ def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
 
 def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
     items: dict[str, tuple[str, bytes | str]] = {}
+    total_bytes = 0
     for current, dirs, files in os.walk(root, topdown=True, followlinks=False):
         for name in list(dirs):
             path = pathlib.Path(current) / name
@@ -362,17 +363,30 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
         for name in files:
             path = pathlib.Path(current) / name
             rel = path.relative_to(root).as_posix()
+            _member_path(rel)
             if path.is_symlink():
                 target = os.readlink(path)
+                link_bytes = len(os.fsencode(target))
+                if link_bytes > MAX_SYMLINK_BYTES:
+                    raise PatchTransitError(
+                        f"Candidate symlink target is too long: {rel!r}"
+                    )
+                total_bytes += link_bytes
                 _safe_target(pathlib.PurePosixPath(rel).parent, target)
                 items[rel] = ("link", target)
             elif path.is_file():
+                size = path.stat().st_size
+                if size > MAX_FILE_BYTES:
+                    raise PatchTransitError(
+                        f"Candidate file exceeds size limit: {rel!r}"
+                    )
+                total_bytes += size
                 # Store digests instead of loading huge binary assets into RAM.
                 # Ordinary source remains in-memory for readable unified diffs.
                 # Git tracks the executable bit. A mode-only patch is a real
                 # change, even when the file's SHA-256 stays identical.
                 suffix = "+x" if path.stat().st_mode & 0o111 else ""
-                if path.stat().st_size > MAX_DIFF_TEXT_BYTES:
+                if size > MAX_DIFF_TEXT_BYTES:
                     digest = hashlib.sha256()
                     with path.open("rb") as source:
                         for block in iter(lambda: source.read(1024 * 1024), b""):
@@ -380,6 +394,10 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
                     items[rel] = ("filehash" + suffix, digest.hexdigest())
                 else:
                     items[rel] = ("file" + suffix, path.read_bytes())
+            if total_bytes > MAX_ARCHIVE_BYTES:
+                raise PatchTransitError(
+                    "Candidate tree exceeds total safety size limit"
+                )
     return items
 
 
