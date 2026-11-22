@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Inspect both directions of a Git patch to include rename source and destination paths and reject unsafe sources concealed by otherwise safe destinations.
+- Inspect both directions of a Git patch to include rename/copy source and destination paths and reject unsafe sources concealed by otherwise safe destinations.
 - Parse `--command` using Windows C-runtime quoting on Windows, preserving absolute executable paths, backslashes and quoted arguments without invoking a shell.
 - Bound per-file text diff inputs to 10,000 lines, emitting hash-only evidence for pathological high-line-count files without invoking the expensive diff algorithm.
 
