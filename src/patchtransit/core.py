@@ -137,6 +137,29 @@ def _safe_target(parent: pathlib.PurePosixPath, linkname: str) -> None:
             raise PatchTransitError(f"Git symlink escapes checkout: {linkname!r}")
 
 
+def _safe_resolved_symlink(root: pathlib.Path, link: pathlib.Path) -> None:
+    """Reject indirect escapes through otherwise safe in-tree symlink chains."""
+    try:
+        resolved_root = root.resolve()
+        resolved_target = link.resolve(strict=False)
+    except (OSError, RuntimeError) as exc:
+        raise PatchTransitError(
+            f"Cannot resolve candidate symlink: {link.name!r}"
+        ) from exc
+    if not resolved_target.is_relative_to(resolved_root):
+        raise PatchTransitError(f"Git symlink chain escapes checkout: {link.name!r}")
+    # strict=False may leave a cyclic link unresolved on Python 3.13+.
+    # A dangling target is fine, but an actual symlink loop is not.
+    try:
+        link.resolve(strict=True)
+    except FileNotFoundError:
+        pass
+    except (OSError, RuntimeError) as exc:
+        raise PatchTransitError(
+            f"Cannot resolve candidate symlink: {link.name!r}"
+        ) from exc
+
+
 def _nul_records(stream: IO[bytes]) -> Iterator[bytes]:
     pending = bytearray()
     while block := stream.read(8192):
@@ -247,6 +270,10 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
                     f"Git tree has duplicate target: {destination.name}"
                 )
             destination.symlink_to(linkname)
+        # Validate after creating *all* links; a link may traverse another
+        # link that has not yet been materialized when the first one is added.
+        for destination, _ in links:
+            _safe_resolved_symlink(target, destination)
     finally:
         for process in (tree_proc, proc):
             if process.poll() is None:
@@ -373,6 +400,7 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
                     )
                 total_bytes += link_bytes
                 _safe_target(pathlib.PurePosixPath(rel).parent, target)
+                _safe_resolved_symlink(root, path)
                 items[rel] = ("link", target)
             elif path.is_file():
                 size = path.stat().st_size
