@@ -82,7 +82,10 @@ class PortableTreeCollisions(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "Folder").mkdir()
-            (root / "folder").mkdir()
+            try:
+                (root / "folder").mkdir()
+            except FileExistsError:
+                self.skipTest("Case-insensitive filesystem")
             (root / "Folder" / "a.txt").write_bytes(b"one")
             (root / "folder" / "b.txt").write_bytes(b"two")
             if (root / "Folder" / "a.txt").exists() and (
