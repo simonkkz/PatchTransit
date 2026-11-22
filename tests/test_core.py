@@ -336,7 +336,7 @@ class MoreEdgeCases(unittest.TestCase):
         p.write_bytes(
             b"diff --git a/x b/y\nsimilarity index 100%\nrename from x\nrename to y\n"
         )
-        self.assertEqual(["y"], patch_metadata(p)["files"])
+        self.assertEqual(["y", "x"], patch_metadata(p)["files"])
 
     def test_effective_diff_escapes_html_code(self):
         data = {

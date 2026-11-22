@@ -403,6 +403,38 @@ def _regular_patch_stream(filename: pathlib.Path) -> Generator[IO[bytes], None, 
             os.close(descriptor)
 
 
+def _patch_numstat(
+    filename: pathlib.Path, *, reverse: bool = False
+) -> list[tuple[str, int, int]]:
+    """Read and validate Git's NUL-delimited affected paths in one direction."""
+    command = ["git", "apply"]
+    if reverse:
+        command.append("--reverse")
+    command.extend(("--numstat", "-z", str(filename)))
+    result = run(command)
+    if result.returncode:
+        raise PatchTransitError(
+            "Invalid patch syntax: " + result.stderr.decode("utf-8", "replace")[:600]
+        )
+    entries: list[tuple[str, int, int]] = []
+    for entry in result.stdout.split(b"\x00"):
+        if not entry:
+            continue
+        if b"\t" not in entry:
+            # Fail explicitly on unsupported framing; never guess patch paths.
+            raise PatchTransitError(
+                "Unsupported patch rename format; use a normal git diff"
+            )
+        a, b, name = entry.split(b"\t", 2)
+        decoded = os.fsdecode(name)
+        if not _path_safe(decoded):
+            raise PatchTransitError(f"Patch contains an unsafe path: {decoded!r}")
+        entries.append(
+            (decoded, int(a) if a.isdigit() else 0, int(b) if b.isdigit() else 0)
+        )
+    return entries
+
+
 def patch_metadata(filename: pathlib.Path | None) -> dict[str, Any]:
     if filename is None:
         return {
@@ -435,31 +467,20 @@ def patch_metadata(filename: pathlib.Path | None) -> dict[str, Any]:
                 hunks += 1
     except OSError as exc:
         raise PatchTransitError(f"Cannot read patch {filename}: {exc}") from exc
-    # Extract paths from git's -z output; no shell, no guesswork about quoting.
-    stat = run(["git", "apply", "--numstat", "-z", str(filename)])
-    if stat.returncode:
-        raise PatchTransitError(
-            "Invalid patch syntax: " + stat.stderr.decode("utf-8", "replace")[:600]
-        )
-    entries = stat.stdout.split(b"\x00")
-    touched: list[str] = []
-    added = removed = 0
-    for entry in entries:
-        if not entry:
-            continue
-        if b"\t" not in entry:
-            # Some Git versions encode complex renames as a second NUL field.
-            # Fail explicitly instead of guessing paths or trusting framing.
-            raise PatchTransitError(
-                "Unsupported patch rename format; use a normal git diff"
-            )
-        a, b, name = entry.split(b"\t", 2)
-        decoded = os.fsdecode(name)
-        if not _path_safe(decoded):
-            raise PatchTransitError(f"Patch contains an unsafe path: {decoded!r}")
-        touched.append(decoded)
-        added += int(a) if a.isdigit() else 0
-        removed += int(b) if b.isdigit() else 0
+    # Forward numstat names the target of a rename, hiding its source path.
+    # Reverse numstat exposes the source, so inspect both directions. This
+    # also prevents a safe-looking rename destination from hiding an unsafe
+    # origin such as `.git/config` during standalone patch inspection.
+    forward = _patch_numstat(filename)
+    reverse = _patch_numstat(filename, reverse=True)
+    touched = [name for name, _, _ in forward]
+    seen = set(touched)
+    for name, _, _ in reverse:
+        if name not in seen:
+            touched.append(name)
+            seen.add(name)
+    added = sum(count for _, count, _ in forward)
+    removed = sum(count for _, _, count in forward)
     return {
         "sha256": digest.hexdigest(),
         "bytes": size,
