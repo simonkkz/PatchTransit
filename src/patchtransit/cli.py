@@ -173,6 +173,10 @@ def _git_control_roots(repository: pathlib.Path) -> tuple[pathlib.Path, pathlib.
     return local, shared.resolve()
 
 
+def _portable_output_key(path: pathlib.Path) -> tuple[str, ...]:
+    return tuple(unicodedata.normalize("NFC", part.casefold()) for part in path.parts)
+
+
 def _validate_outputs(args: argparse.Namespace) -> None:
     sources = (args.old, args.new) if args.action == "compare" else (args.patch,)
     outputs = tuple(
@@ -181,7 +185,7 @@ def _validate_outputs(args: argparse.Namespace) -> None:
     if not any(destination is not None for _, destination in outputs):
         return
     source_paths = {
-        target
+        _portable_output_key(target)
         for source in sources
         for target in (source.expanduser().resolve(), resolve_output_path(source))
     }
@@ -192,25 +196,27 @@ def _validate_outputs(args: argparse.Namespace) -> None:
         if args.action != "inspect":
             raise
         protected_roots = ()
-    seen: dict[pathlib.Path, str] = {}
+    protected_keys = tuple(_portable_output_key(root) for root in protected_roots)
+    seen: dict[tuple[str, ...], str] = {}
     for flag, output in outputs:
         output = getattr(args, flag, None)
         if output is None:
             continue
         destination = resolve_output_path(output)
+        key = _portable_output_key(destination)
         # Report destinations should never alter Git's control files or refs,
         # even if a caller accidentally requests --json .git/config.
         if any(part.casefold() == ".git" for part in destination.parts):
             raise PatchTransitError(f"--{flag} cannot target a .git control path")
-        if any(destination.is_relative_to(root) for root in protected_roots):
+        if any(key[: len(root)] == root for root in protected_keys):
             raise PatchTransitError(f"--{flag} cannot target a Git control path")
-        if destination in source_paths:
+        if key in source_paths:
             raise PatchTransitError(f"--{flag} would overwrite an input patch")
-        if previous := seen.get(destination):
+        if previous := seen.get(key):
             raise PatchTransitError(
                 f"--{flag} and --{previous} have the same output path"
             )
-        seen[destination] = flag
+        seen[key] = flag
 
 
 def main(argv: list[str] | None = None) -> int:
