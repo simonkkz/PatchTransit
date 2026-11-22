@@ -72,6 +72,8 @@ def run(
     input_data: bytes | None = None,
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
+    if not args or not args[0]:
+        raise PatchTransitError("Command must specify an executable")
     # Git output should not be held in unlimited subprocess.run buffers.
     # Anonymous temporary files also prevent pipe inheritance from stalling
     # the parent if a command launches a descendant with the same handles.
@@ -924,6 +926,8 @@ def _timeout_seconds(timeout: int) -> float:
 
 
 def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> CommandEvidence:
+    if not command or not command[0]:
+        raise PatchTransitError("Verification command must specify an executable")
     timeout_seconds = _timeout_seconds(timeout)
     started = time.monotonic()
     try:
@@ -1026,6 +1030,8 @@ def evaluate(
     command: list[str] | None = None,
     timeout: int = 120,
 ) -> ComparisonEvidence:
+    if command is not None and (not command or not command[0]):
+        raise PatchTransitError("Verification command must specify an executable")
     repo, tree = repository(repo_path, revision)
     old_patch = old_patch.resolve() if old_patch else None
     new_patch = new_patch.resolve() if new_patch else None
