@@ -190,10 +190,16 @@ def _portable_name(name: str) -> bool:
     return True
 
 
+def _canonical_git_path(name: str) -> bool:
+    """Git object paths cannot contain empty, current or parent components."""
+    return bool(name) and all(part not in ("", ".", "..") for part in name.split("/"))
+
+
 def _member_path(name: str) -> pathlib.PurePosixPath:
     item = pathlib.PurePosixPath(name)
     if (
         item.is_absolute()
+        or not _canonical_git_path(name)
         or not item.parts
         or ".." in item.parts
         or not _portable_name(name)
@@ -370,7 +376,7 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
 
 
 def _path_safe(filename: str) -> bool:
-    if not _portable_name(filename):
+    if not _canonical_git_path(filename) or not _portable_name(filename):
         return False
     path = pathlib.PurePosixPath(filename)
     return (
