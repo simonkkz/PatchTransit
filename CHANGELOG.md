@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Bound cumulative tracked pathname bytes to 64 MiB on both committed trees and patched candidates, complementing existing file-size and entry-count limits.
 - Reject Windows `CONIN$` and `CONOUT$` console device paths (including case and extension variants) in Git entries, patches and symlink targets.
 - Reject non-canonical empty and dot path components in raw Git tree and patch paths before path-library normalization can hide them.
 - Escape terminal control sequences, bidirectional formatting characters and undecodable pathname bytes before printing Git paths, output destinations and errors in the CLI.
