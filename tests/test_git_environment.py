@@ -96,9 +96,7 @@ class GitEnvironmentIsolation(unittest.TestCase):
         candidate.mkdir()
         original_pwd = self.root / "unrelated"
         original_pwd.mkdir()
-        script = (
-            "import os,sys; sys.exit(0 if os.environ.get('PWD') == os.getcwd() else 3)"
-        )
+        script = "import os,sys; sys.exit(0 if os.path.samefile(os.environ['PWD'], os.getcwd()) else 3)"
         with patch.dict(os.environ, {"PWD": str(original_pwd)}):
             result = execute([sys.executable, "-c", script], candidate, timeout=5)
         self.assertEqual(0, result["exit_code"])
