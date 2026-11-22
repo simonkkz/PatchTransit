@@ -169,7 +169,8 @@ def repository(path: pathlib.Path, revision: str) -> tuple[pathlib.Path, str]:
 
 
 _WINDOWS_DEVICE = re.compile(
-    r"^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?$", re.IGNORECASE
+    r"^(?:con|conin\$|conout\$|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?$",
+    re.IGNORECASE,
 )
 
 

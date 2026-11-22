@@ -48,6 +48,27 @@ class WindowsPathSafety(unittest.TestCase):
         _safe_target(parent, "../inside.txt")
         _safe_target(parent, "../../root.txt")
 
+    def test_console_handles_cannot_be_treated_as_regular_file_paths(self):
+        for name in (
+            "CONIN$",
+            "CONOUT$",
+            "conin$.txt",
+            "CONOUT$.log",
+            "nested/ConIn$",
+            "nested/cOnOuT$.txt",
+        ):
+            with self.subTest(name=name):
+                with self.assertRaises(PatchTransitError):
+                    _member_path(name)
+                self.assertFalse(_path_safe(name))
+        for name in ("CONIN$", "ConOut$.log"):
+            with self.subTest(linkname=name), self.assertRaises(PatchTransitError):
+                _safe_target(PurePosixPath("nested"), name)
+        for name in ("CONIN$-notes.txt", "nested/CONOUT$summary.txt"):
+            with self.subTest(safe_name=name):
+                self.assertEqual(name, _member_path(name).as_posix())
+                self.assertTrue(_path_safe(name))
+
     def test_git_patch_paths_follow_same_rules(self):
         for name in (
             "D:/outside.txt",
