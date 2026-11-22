@@ -2,6 +2,7 @@
 
 ## 0.1.1 — maintenance and quality checks
 
+- Isolate internal Git processes from inherited `GIT_*` overrides, preventing foreign worktree/index/object paths from silently changing which repository is inspected.
 - Use constant-length temporary filenames for atomic reports so long valid output names do not exceed filesystem `NAME_MAX`.
 - Fail explicitly on candidate directory enumeration errors instead of silently omitting inaccessible files from evidence.
 - Bound inline text candidate inventories to 64 MiB each and use streamed hashes beyond the preview budget without changing tree fingerprints or manifests.

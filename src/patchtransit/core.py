@@ -40,6 +40,16 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _git_env() -> dict[str, str]:
+    """Keep caller Git overrides from redirecting read-only repository operations."""
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
+    environment["GIT_NO_LAZY_FETCH"] = "1"
+    environment["GIT_TERMINAL_PROMPT"] = "0"
+    return environment
+
+
 def run(
     args: list[str],
     *,
@@ -51,6 +61,8 @@ def run(
     # Git output should not be held in unlimited subprocess.run buffers.
     # Anonymous temporary files also prevent pipe inheritance from stalling
     # the parent if a command launches a descendant with the same handles.
+    if args and args[0] == "git" and env is None:
+        env = _git_env()
     try:
         with (
             tempfile.TemporaryFile(mode="w+b") as stdout,
@@ -118,7 +130,7 @@ def git(args: list[str], cwd: pathlib.Path, *, timeout: int = 120) -> bytes:
         ["git", *args],
         cwd=cwd,
         timeout=timeout,
-        env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
+        env=_git_env(),
     )
     if completed.returncode:
         message = completed.stderr.decode("utf-8", "replace").strip()
@@ -246,7 +258,7 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
     """Copy exact tracked Git blobs into a bounded temporary candidate tree."""
     # Partial clones may lazily fetch missing blobs. Treat them as unavailable
     # instead of allowing Git to make an implicit network request.
-    git_env = {**os.environ, "GIT_NO_LAZY_FETCH": "1"}
+    git_env = _git_env()
     tree_proc = subprocess.Popen(
         ["git", "ls-tree", "-r", "-z", "--full-tree", tree],
         cwd=repo,
