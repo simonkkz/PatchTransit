@@ -11,7 +11,7 @@ body:
     attributes:
       label: PatchTransit version
       description: Run `patchtransit --version`, or provide a commit SHA.
-      placeholder: "0.1.1 / commit SHA"
+      placeholder: "Output of patchtransit --version / commit SHA"
     validations:
       required: true
   - type: dropdown
