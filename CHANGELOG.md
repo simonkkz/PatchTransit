@@ -4,6 +4,7 @@
 
 - Reject Windows `CONIN$` and `CONOUT$` console device paths (including case and extension variants) in Git entries, patches and symlink targets.
 - Reject non-canonical empty and dot path components in raw Git tree and patch paths before path-library normalization can hide them.
+- Escape terminal control sequences, bidirectional formatting characters and undecodable pathname bytes before printing Git paths, output destinations and errors in the CLI.
 - Inspect both directions of a Git patch to include rename/copy source and destination paths and reject unsafe sources concealed by otherwise safe destinations.
 - Render executable-mode-only changes in hash-only files as complete Git-applicable mode diffs rather than adding misleading content placeholders.
 - Parse `--command` using Windows C-runtime quoting on Windows, preserving absolute executable paths, backslashes and quoted arguments without invoking a shell.
