@@ -104,7 +104,7 @@ The **common base tree matters**. Patches based on different commits should be r
 | `--command CMD --execute` | Run the same test command on both candidate directories |
 | `--timeout N` | Per-command timeout in seconds (default 120) |
 
-Exit codes: `0` for successful comparison with no confirmed regression, `1` if the old test succeeded but the new test failed, `2` for invalid arguments, inapplicable patches or other errors. Without a test command, a `changed` verdict is informational and exits `0`. Output paths must be distinct and cannot overwrite input patch files or Git control paths such as `.git/config` and `.git/index`; conflicting destinations are rejected before writing. Ordinary report paths inside the working directory remain supported.
+Exit codes: `0` for successful comparison with no confirmed regression, `1` if the old test succeeded but the new test failed, `2` for invalid arguments, inapplicable patches or other errors. Without a test command, a `changed` verdict is informational and exits `0`. Output paths must be distinct and cannot overwrite input patch files or Git control directories, including repositories configured with `--separate-git-dir` or linked worktrees; conflicting destinations are rejected before writing. Ordinary report paths inside the working directory remain supported.
 
 ## Security and privacy
 
