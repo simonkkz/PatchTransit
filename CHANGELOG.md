@@ -2,6 +2,7 @@
 
 ## 0.1.1 — maintenance and quality checks
 
+- Cap committed and patched candidate trees at 100,000 entries, including zero-byte files that do not consume the aggregate byte budget.
 - Enforce file, symlink and aggregate byte limits on resulting patched candidate trees, not only the original committed Git tree.
 - Validate resolved symlink chains within base and patched candidate trees to catch indirect checkout escapes and cycles.
 - Validate symlinks introduced by patch application, not only those present in the base Git tree, before running optional commands.

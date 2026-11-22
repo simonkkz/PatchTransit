@@ -20,6 +20,7 @@ from typing import IO, Any
 MAX_ARCHIVE_BYTES = 2 * 1024**3
 MAX_SYMLINK_BYTES = 4096
 MAX_TREE_ENTRY_BYTES = 16384
+MAX_TREE_ENTRIES = 100_000
 MAX_FILE_BYTES = 512 * 1024**2
 MAX_DIFF_TEXT_BYTES = 2 * 1024**2
 MAX_DIFF_LINES = 16000
@@ -198,9 +199,13 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
     assert tree_proc.stdout is not None
     assert proc.stdin is not None and proc.stdout is not None
     total = 0
+    count = 0
     links: list[tuple[pathlib.Path, str]] = []
     try:
         for record in _nul_records(tree_proc.stdout):
+            count += 1
+            if count > MAX_TREE_ENTRIES:
+                raise PatchTransitError("Git tree exceeds maximum entry count")
             heading, separator, path = record.partition(b"\t")
             parts = heading.split(b" ")
             if not separator or len(parts) != 3:
@@ -388,6 +393,8 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
                 files.append(name)
                 dirs.remove(name)
         for name in files:
+            if len(items) >= MAX_TREE_ENTRIES:
+                raise PatchTransitError("Candidate tree exceeds maximum entry count")
             path = pathlib.Path(current) / name
             rel = path.relative_to(root).as_posix()
             _member_path(rel)
