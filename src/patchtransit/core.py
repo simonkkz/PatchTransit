@@ -721,6 +721,9 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
     # origin such as `.git/config` during standalone patch inspection.
     forward = _patch_numstat(filename)
     reverse = _patch_numstat(filename, reverse=True)
+    # A rename counts once per direction, even though it has two path names.
+    if max(len(forward), len(reverse)) > MAX_TREE_ENTRIES:
+        raise PatchTransitError("Patch exceeds maximum entry count")
     touched = list(dict.fromkeys(name for name, _, _ in forward))
     seen = set(touched)
     for name, _, _ in reverse:
