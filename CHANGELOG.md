@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- List each affected path once when inspecting an mbox with multiple commits that touch the same file.
 - Report an ordinary CLI error for `~user` paths whose home directory cannot be resolved, including report destinations.
 
 ## 0.1.5 — verification isolation and safety limits
