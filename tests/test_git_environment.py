@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from patchtransit.core import _git_env, evaluate, repository, run
+from patchtransit.core import _git_env, evaluate, execute, repository, run
 
 
 class GitEnvironmentIsolation(unittest.TestCase):
@@ -69,6 +70,26 @@ class GitEnvironmentIsolation(unittest.TestCase):
         self.assertEqual(
             self.repo_b.resolve(), Path(os.fsdecode(result.stdout.rstrip(b"\n")))
         )
+
+    def test_opt_in_verification_command_cannot_inherit_foreign_git_repository(self):
+        candidate = self.root / "candidate"
+        candidate.mkdir()
+        # Without environment isolation, Git would resolve repo_a rather than
+        # fail inside this candidate with no Git directory.
+        script = (
+            "import os,subprocess,sys; "
+            "result=subprocess.run(['git','rev-parse','--show-toplevel'],"
+            "capture_output=True); "
+            "sys.exit(0 if result.returncode != 0 and "
+            "os.environ.get('PATCHTRANSIT_TEST') == 'enabled' and "
+            "not any(key.startswith('GIT_') for key in os.environ) else 1)"
+        )
+        with patch.dict(
+            os.environ, {**self.contaminated_env(), "PATCHTRANSIT_TEST": "enabled"}
+        ):
+            result = execute([sys.executable, "-c", script], candidate, timeout=5)
+        self.assertEqual(0, result["exit_code"])
+        self.assertFalse(result.get("timeout", False))
 
     def test_git_env_keeps_normal_environment_and_disables_lazy_fetch(self):
         with patch.dict(

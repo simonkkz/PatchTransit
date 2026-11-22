@@ -55,11 +55,15 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _git_env() -> dict[str, str]:
-    """Keep caller Git overrides from redirecting read-only repository operations."""
-    environment = {
+def _without_git_env() -> dict[str, str]:
+    return {
         key: value for key, value in os.environ.items() if not key.startswith("GIT_")
     }
+
+
+def _git_env() -> dict[str, str]:
+    """Keep caller Git overrides from redirecting read-only repository operations."""
+    environment = _without_git_env()
     environment["GIT_NO_LAZY_FETCH"] = "1"
     environment["GIT_TERMINAL_PROMPT"] = "0"
     return environment
@@ -1042,6 +1046,7 @@ def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> CommandEvide
             with subprocess.Popen(
                 command,
                 cwd=cwd,
+                env=_without_git_env(),
                 stdout=stdout,
                 stderr=stderr,
                 stdin=subprocess.DEVNULL,

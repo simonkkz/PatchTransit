@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Clear inherited `GIT_*` overrides from optional verification commands, preventing accidental Git operations against the caller’s repository instead of a candidate.
 ## 0.1.4 — direct patch integrity and report safety
 
 - Snapshot direct Python API patch inputs before validating and applying them so later source mutations cannot bypass preflight.
