@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.3 — patch fidelity and cross-platform safety
+
 - Reject Git submodule (gitlink mode `160000`) patches in both comparisons and direct patch application before Git can silently ignore their tracked entries.
 - Distinguish missing repository/working-directory paths from missing executables in subprocess failures.
 - Reject Windows-reserved punctuation in Git tree entries, patches and symlink targets on all hosts; reject C0 filename controls on Windows before filesystem access.
