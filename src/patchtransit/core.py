@@ -356,14 +356,24 @@ def export_tree(repo: pathlib.Path, tree: str, target: pathlib.Path) -> None:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    proc = subprocess.Popen(
-        ["git", "cat-file", "--batch"],
-        cwd=repo,
-        env=git_env,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    try:
+        proc = subprocess.Popen(
+            ["git", "cat-file", "--batch"],
+            cwd=repo,
+            env=git_env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except BaseException:
+        # A failed second launch must not leave ls-tree running or its pipes open.
+        if tree_proc.poll() is None:
+            tree_proc.kill()
+        tree_proc.wait()
+        for pipe in (tree_proc.stdout, tree_proc.stderr):
+            if pipe is not None:
+                pipe.close()
+        raise
     assert tree_proc.stdout is not None
     assert proc.stdin is not None and proc.stdout is not None
     total = 0
