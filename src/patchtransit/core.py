@@ -614,10 +614,24 @@ def patch_metadata(filename: pathlib.Path | None) -> PatchMetadata:
 
 
 def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
+    if patch is not None:
+        try:
+            patch_metadata(patch.absolute())
+        except PatchTransitError as exc:
+            message = str(exc)
+            if message.startswith("Invalid patch syntax: "):
+                raise PatchTransitError(
+                    "Patch did not apply to the selected base tree: "
+                    + message.removeprefix("Invalid patch syntax: ")
+                ) from exc
+            raise
+    _apply_preflighted_patch(path, patch)
+
+
+def _apply_preflighted_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
     if patch is None:
         return
     patch = patch.absolute()
-    # Validate standalone use as well as evaluate()'s private snapshots.
     # A FIFO may have st_size==0 but is not an empty regular Git patch.
     with _regular_patch_stream(patch) as source:
         if os.fstat(source.fileno()).st_size == 0:
@@ -1130,8 +1144,8 @@ def evaluate(
         right.mkdir()
         export_tree(repo, tree, left)
         export_tree(repo, tree, right)
-        apply_patch(left, old_snapshot)
-        apply_patch(right, new_snapshot)
+        _apply_preflighted_patch(left, old_snapshot)
+        _apply_preflighted_patch(right, new_snapshot)
         first = inventory(left)
         second = inventory(right)
         changed, text_diff = compare_inventories(first, second)
