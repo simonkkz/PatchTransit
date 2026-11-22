@@ -2,8 +2,11 @@
 
 ## Unreleased
 
+## 1.0.1
+
 - Reap Git subprocess descendants that inherit export pipes when the export deadline expires.
 - Inspect all patch paths regardless of the caller's working directory, including unsafe paths outside a nested Git prefix.
+
 ## 1.0.0
 
 - Stabilize the documented CLI, Python evidence API and schema-1 compatibility contract under Semantic Versioning.
