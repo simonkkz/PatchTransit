@@ -28,7 +28,7 @@ A 40-file diff gets updated after review. Did it fix the race, change a test, or
 - Never checks out, stages, rebases, or modifies your working repository.
 - Highlights newly added, removed, and changed effects between patch revisions, including executable-mode changes on POSIX systems.
 - Optional test command runs separately on **both** candidate trees, with explicit opt-in.
-- Generates a standalone HTML report, machine-readable JSON, and a traditional unified diff.
+- Generates standalone HTML and machine-readable JSON evidence plus a bounded effective diff preview.
 - No LLM, API key, account, service, telemetry, or runtime Python dependencies.
 
 ## 30-second quickstart
@@ -83,7 +83,7 @@ patchtransit inspect before.patch
 
 ## What is actually compared?
 
-The output is determined by the full file state after applying each patch, not by subtraction of patch text. Executable permission changes are represented as mode metadata on platforms that preserve POSIX file modes; mode-only changes may not be observable on Windows filesystems. For every changed file, the JSON records the path, change type and SHA-256 digest of both versions. Plain UTF-8 changes, including file additions and deletions, appear as Git-applicable unified diffs. Binary/large-file changes are represented by their checksums rather than complete patches. The readable diff preview is capped at 16,000 lines or 8 MiB; when truncated, the JSON `changes` manifest still includes **every** changed file.
+The output is determined by the full file state after applying each patch, not by subtraction of patch text. Executable permission changes are represented as mode metadata on platforms that preserve POSIX file modes; mode-only changes may not be observable on Windows filesystems. For every changed file, the JSON records the path, change type and SHA-256 digest of both versions. Plain UTF-8 changes, including file additions and deletions, appear as Git-applicable unified diffs. Binary/large-file changes are represented by their checksums rather than complete patches. The readable diff preview is capped at 16,000 lines or 8 MiB; when truncated, the JSON `changes` manifest still includes **every** changed file. The JSON `diff_preview_complete` boolean indicates whether the preview represents all changes as an applicable text patch. If any binary, large, symlink, non-UTF-8 or truncated change is omitted, that flag is `false`; do not use an incomplete preview as a patch to replay the complete comparison.
 
 The **common base tree matters**. Patches based on different commits should be rebased onto a common base before comparing them. PatchTransit refuses to compare a revision that fails to apply cleanly. Patch inputs must be regular files (not FIFOs or devices). They are copied into temporary snapshots before inspection or comparison, so changing an original `.patch` file midway through an operation cannot change the evaluated revision or invalidate its recorded SHA-256.
 
@@ -100,7 +100,7 @@ The **common base tree matters**. Patches based on different commits should be r
 | `--base REF` | Git revision (default `HEAD`) |
 | `--json FILE` | Versioned machine-readable result |
 | `--html FILE` | Self-contained dark-mode HTML report |
-| `--diff FILE` | Effective unified diff |
+| `--diff FILE` | Bounded effective diff preview (may not be a complete applicable patch) |
 | `--command CMD --execute` | Run the same test command on both candidate directories |
 | `--timeout N` | Per-command timeout in seconds (default 120) |
 

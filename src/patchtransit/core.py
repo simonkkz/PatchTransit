@@ -737,6 +737,32 @@ def compare_inventories(
     return changes, "".join(diff_lines)
 
 
+def _preview_complete(
+    changes: list[dict[str, Any]],
+    left: dict[str, tuple[str, bytes | str]],
+    right: dict[str, tuple[str, bytes | str]],
+    rendered: str,
+) -> bool:
+    """Whether an effective diff represents every change as applicable text."""
+    if rendered.endswith("\n... diff truncated; JSON manifest remains complete ...\n"):
+        return False
+    for item in changes:
+        for state in (left.get(item["path"]), right.get(item["path"])):
+            if state is None:
+                continue
+            if state[0] not in ("file", "file+x"):
+                return False
+            contents = state[1]
+            assert isinstance(contents, bytes)
+            if len(contents) > MAX_DIFF_TEXT_BYTES or b"\x00" in contents:
+                return False
+            try:
+                contents.decode("utf-8")
+            except UnicodeDecodeError:
+                return False
+    return True
+
+
 def _hash_stream(stream: IO[bytes]) -> str:
     digest = hashlib.sha256()
     stream.seek(0)
@@ -880,6 +906,7 @@ def evaluate(
         first = inventory(left)
         second = inventory(right)
         changed, text_diff = compare_inventories(first, second)
+        preview_complete = _preview_complete(changed, first, second, text_diff)
         # Candidate state must be fingerprinted BEFORE user-defined tests run:
         # test suites frequently create caches, snapshots and output files.
         # The report describes the patch effect, not test side effects.
@@ -916,6 +943,7 @@ def evaluate(
             "changes": changed,
             "changed_files": len(changed),
             "effective_diff": text_diff,
+            "diff_preview_complete": preview_complete,
             "checks": checks,
         }
         report["verdict"] = "identical" if not changed else "changed"

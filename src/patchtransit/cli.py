@@ -158,7 +158,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"HTML report: {args.html}")
         if args.diff:
             atomic_write(args.diff, outcome["effective_diff"])
-            print(f"Effective diff: {args.diff}")
+            print(f"Effective diff preview: {args.diff}")
+            if not outcome.get("diff_preview_complete", True):
+                print(
+                    "patchtransit: the diff preview omits some changes; "
+                    "use --json for the complete file manifest",
+                    file=sys.stderr,
+                )
         return 1 if outcome["verdict"] == "regression" else 0
     except (PatchTransitError, ValueError, OSError) as exc:
         print(f"patchtransit: {exc}", file=sys.stderr)
