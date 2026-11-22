@@ -637,7 +637,15 @@ def _apply_preflighted_patch(path: pathlib.Path, patch: pathlib.Path | None) -> 
         if os.fstat(source.fileno()).st_size == 0:
             return
     for action in ("--check", None):
-        cmd = ["git", "-c", "core.autocrlf=false", "apply", "--whitespace=nowarn"]
+        cmd = [
+            "git",
+            "-c",
+            "core.autocrlf=false",
+            "-c",
+            "core.symlinks=true",
+            "apply",
+            "--whitespace=nowarn",
+        ]
         if action:
             cmd.append(action)
         cmd.extend(("--", str(patch)))
