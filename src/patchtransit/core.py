@@ -599,6 +599,21 @@ def _line_count(content: bytes) -> int:
     return content.count(b"\n") + int(bool(content) and not content.endswith(b"\n"))
 
 
+def _mode_only_change(
+    before: tuple[str, bytes | str] | None,
+    after: tuple[str, bytes | str] | None,
+) -> bool:
+    """An executable-bit change alone is applicable without file bytes."""
+    return bool(
+        before
+        and after
+        and before[0].startswith("file")
+        and after[0].startswith("file")
+        and before[0].endswith("+x") != after[0].endswith("+x")
+        and _digest(before) == _digest(after)
+    )
+
+
 def _lf_lines(text: str) -> list[str]:
     """Split on LF only; str.splitlines() also splits valid text at VT/FF/NEL."""
     parts = text.split("\n")
@@ -700,6 +715,10 @@ def compare_inventories(
                 append_diff(line)
         if truncated:
             continue
+        # Mode changes do not require a readable content diff when the
+        # content digests agree. This also works for hash-only large files.
+        if _mode_only_change(a, b):
+            continue
         # A large file is represented by its hash. Never pretend a size or
         # kind transition is an addition/deletion from an *empty* text file.
         if (a and a[0] not in ("file", "file+x")) or (
@@ -780,7 +799,11 @@ def _preview_complete(
     if rendered.endswith("\n... diff truncated; JSON manifest remains complete ...\n"):
         return False
     for item in changes:
-        for state in (left.get(item["path"]), right.get(item["path"])):
+        before = left.get(item["path"])
+        after = right.get(item["path"])
+        if _mode_only_change(before, after):
+            continue
+        for state in (before, after):
             if state is None:
                 continue
             if state[0] not in ("file", "file+x"):
