@@ -33,7 +33,9 @@ class CrossPlatformDemo(unittest.TestCase):
             )
             self.assertEqual(0, result.returncode, result.stderr)
             self.assertIn("PatchTransit | CHANGED | 1 effective files", result.stdout)
-            self.assertIn(str(output / "demo.html"), result.stdout)
+            # Windows short 8.3 Temp paths may resolve to their canonical long
+            # names (RUNNER~1 -> runneradmin) inside the Python demo.
+            self.assertIn(str(output.resolve() / "demo.html"), result.stdout)
             self.assertEqual(
                 {"demo.html", "demo.json", "demo.diff"},
                 {path.name for path in output.iterdir()},
