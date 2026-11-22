@@ -197,13 +197,16 @@ def _validate_outputs(args: argparse.Namespace) -> None:
             raise
         protected_roots = ()
     protected_keys = tuple(_portable_output_key(root) for root in protected_roots)
-    seen: dict[tuple[str, ...], str] = {}
+    seen: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = []
     for flag, output in outputs:
         output = getattr(args, flag, None)
         if output is None:
             continue
         destination = resolve_output_path(output)
         key = _portable_output_key(destination)
+        literal_key = _portable_output_key(
+            pathlib.Path(os.path.abspath(output.expanduser()))
+        )
         # Report destinations should never alter Git's control files or refs,
         # even if a caller accidentally requests --json .git/config.
         if any(part.casefold() == ".git" for part in destination.parts):
@@ -212,11 +215,21 @@ def _validate_outputs(args: argparse.Namespace) -> None:
             raise PatchTransitError(f"--{flag} cannot target a Git control path")
         if key in source_paths:
             raise PatchTransitError(f"--{flag} would overwrite an input patch")
-        if previous := seen.get(key):
-            raise PatchTransitError(
-                f"--{flag} and --{previous} have the same output path"
-            )
-        seen[key] = flag
+        for previous, previous_key, previous_literal in seen:
+            if key == previous_key or literal_key == previous_literal:
+                raise PatchTransitError(
+                    f"--{flag} and --{previous} have the same output path"
+                )
+            if (
+                key[: len(previous_key)] == previous_key
+                or previous_key[: len(key)] == key
+                or literal_key[: len(previous_literal)] == previous_literal
+                or previous_literal[: len(literal_key)] == literal_key
+            ):
+                raise PatchTransitError(
+                    f"--{flag} and --{previous} have conflicting output paths"
+                )
+        seen.append((flag, key, literal_key))
 
 
 def main(argv: list[str] | None = None) -> int:

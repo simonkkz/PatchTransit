@@ -83,6 +83,40 @@ class ReportOutputCollisions(unittest.TestCase):
         self.assertFalse(composed.exists())
         self.assertFalse(decomposed.exists())
 
+    def test_parent_and_child_outputs_are_rejected_before_writing(self):
+        parent = self.root / "report.json"
+        child = parent / "detail.html"
+        for first, second in ((parent, child), (child, parent)):
+            with self.subTest(first=first):
+                code, error = self.invoke("--json", str(first), "--html", str(second))
+                self.assertEqual(2, code)
+                self.assertIn("conflicting output paths", error)
+                self.assertFalse(parent.exists())
+
+    def test_portable_case_alias_of_parent_is_rejected(self):
+        parent = self.root / "REPORT.JSON"
+        child = self.root / "report.json" / "detail.html"
+        code, error = self.invoke("--json", str(parent), "--html", str(child))
+        self.assertEqual(2, code)
+        self.assertIn("conflicting output paths", error)
+        self.assertFalse(parent.exists())
+
+    def test_directory_symlink_parent_is_rejected_before_replacement(self):
+        actual = self.root / "actual-dir"
+        actual.mkdir()
+        alias = self.root / "report.json"
+        try:
+            alias.symlink_to(actual, target_is_directory=True)
+        except OSError as exc:
+            self.skipTest(f"Directory symlink creation unavailable: {exc}")
+        code, error = self.invoke(
+            "--json", str(alias), "--html", str(alias / "detail.html")
+        )
+        self.assertEqual(2, code)
+        self.assertIn("conflicting output paths", error)
+        self.assertTrue(alias.is_symlink())
+        self.assertFalse((actual / "detail.html").exists())
+
     def test_input_patch_case_alias_cannot_be_a_report_destination(self):
         original = self.patch.read_bytes()
         alias = self.root / "INPUT.PATCH"
