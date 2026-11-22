@@ -25,6 +25,7 @@ MAX_TREE_ENTRY_BYTES = 16384
 MAX_TREE_ENTRIES = 100_000
 MAX_FILE_BYTES = 512 * 1024**2
 MAX_DIFF_TEXT_BYTES = 2 * 1024**2
+MAX_INVENTORY_PREVIEW_BYTES = 64 * 1024**2
 MAX_DIFF_LINES = 16000
 MAX_DIFF_OUTPUT_BYTES = 8 * 1024**2
 MAX_COMMAND_OUTPUT_BYTES = 64 * 1024**2
@@ -427,13 +428,17 @@ def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
 def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
     items: dict[str, tuple[str, bytes | str]] = {}
     total_bytes = 0
+    preview_bytes = 0
     for current, dirs, files in os.walk(root, topdown=True, followlinks=False):
         for name in list(dirs):
             path = pathlib.Path(current) / name
             if path.is_symlink():
                 files.append(name)
                 dirs.remove(name)
-        for name in files:
+        # Give both candidates a deterministic order when deciding which
+        # readable files get included in the in-memory diff preview budget.
+        dirs.sort()
+        for name in sorted(files):
             if len(items) >= MAX_TREE_ENTRIES:
                 raise PatchTransitError("Candidate tree exceeds maximum entry count")
             path = pathlib.Path(current) / name
@@ -462,7 +467,10 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
                 # Git tracks the executable bit. A mode-only patch is a real
                 # change, even when the file's SHA-256 stays identical.
                 suffix = "+x" if path.stat().st_mode & 0o111 else ""
-                if size > MAX_DIFF_TEXT_BYTES:
+                if (
+                    size > MAX_DIFF_TEXT_BYTES
+                    or preview_bytes + size > MAX_INVENTORY_PREVIEW_BYTES
+                ):
                     digest = hashlib.sha256()
                     with path.open("rb") as source:
                         for block in iter(lambda: source.read(1024 * 1024), b""):
@@ -470,6 +478,7 @@ def inventory(root: pathlib.Path) -> dict[str, tuple[str, bytes | str]]:
                     items[rel] = ("filehash" + suffix, digest.hexdigest())
                 else:
                     items[rel] = ("file" + suffix, path.read_bytes())
+                    preview_bytes += size
             if total_bytes > MAX_ARCHIVE_BYTES:
                 raise PatchTransitError(
                     "Candidate tree exceeds total safety size limit"
