@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from patchtransit.cli import main
 
@@ -70,6 +71,40 @@ class CliBehavior(unittest.TestCase):
             hashlib.sha256(self.patch.read_bytes()).hexdigest(), doc["sha256"]
         )
         self.assertEqual(["app.py"], doc["files"])
+        self.assertEqual("value=1\n", self.source.read_text(encoding="utf-8"))
+
+    def test_quoted_home_paths_work_for_all_actions(self):
+        (self.root / "first.patch").write_bytes(b"")
+        with patch.dict(
+            os.environ, {"HOME": str(self.root), "USERPROFILE": str(self.root)}
+        ):
+            code, _, err = self.call(
+                "inspect", "~/new.patch", "--json", "~/inspected.json"
+            )
+            self.assertEqual((0, ""), (code, err))
+            self.assertEqual(
+                ["app.py"],
+                json.loads((self.root / "inspected.json").read_text())["files"],
+            )
+
+            code, _, err = self.call(
+                "verify",
+                "~/new.patch",
+                "--repo",
+                "~/repo",
+                "--json",
+                "~/verified.json",
+            )
+            self.assertEqual((0, ""), (code, err))
+            self.assertEqual(
+                "changed",
+                json.loads((self.root / "verified.json").read_text())["verdict"],
+            )
+
+            code, _, err = self.call(
+                "compare", "~/first.patch", "~/new.patch", "--repo", "~/repo"
+            )
+            self.assertEqual((0, ""), (code, err))
         self.assertEqual("value=1\n", self.source.read_text(encoding="utf-8"))
 
     def test_inspect_rejects_unsafe_path(self):
