@@ -435,7 +435,7 @@ def _patch_numstat(
     command = ["git", "apply"]
     if reverse:
         command.append("--reverse")
-    command.extend(("--numstat", "-z", str(filename)))
+    command.extend(("--numstat", "-z", "--", str(filename)))
     result = run(command)
     if result.returncode:
         raise PatchTransitError(
@@ -540,7 +540,7 @@ def apply_patch(path: pathlib.Path, patch: pathlib.Path | None) -> None:
         cmd = ["git", "apply", "--whitespace=nowarn"]
         if action:
             cmd.append(action)
-        cmd.append(str(patch))
+        cmd.extend(("--", str(patch)))
         response = run(cmd, cwd=path)
         if response.returncode:
             raise PatchTransitError(
