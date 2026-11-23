@@ -85,6 +85,38 @@ class CommandEvidence(unittest.TestCase):
             marker.exists(), "A timed-out verification left a child running"
         )
 
+    def test_output_limit_stops_child_processes(self):
+        marker = self.root / "orphan-output.txt"
+        child = (
+            "import pathlib,time; "
+            "time.sleep(2); "
+            f"pathlib.Path({str(marker)!r}).write_text('still running')"
+        )
+        parent = (
+            "import subprocess,sys,time; "
+            f"subprocess.Popen([sys.executable,'-c',{child!r}]); "
+            "sys.stdout.write('x' * 8192); sys.stdout.flush(); "
+            "time.sleep(8)"
+        )
+        with patch("patchtransit.core.MAX_COMMAND_OUTPUT_BYTES", 1024):
+            result = execute([sys.executable, "-c", parent], self.root, timeout=3)
+        self.assertEqual("OutputLimitExceeded", result["error"])
+        time.sleep(3)
+        self.assertFalse(
+            marker.exists(), "An output-limited verification left a child running"
+        )
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX process groups only")
+    def test_missing_process_group_still_kills_command(self):
+        with patch("patchtransit.core.os", wraps=os) as simulated_os:
+            simulated_os.kill.side_effect = ProcessLookupError("group gone")
+            result = execute(
+                [sys.executable, "-c", "import time; time.sleep(10)"],
+                self.root,
+                timeout=1,
+            )
+        self.assertTrue(result["timeout"])
+
     def test_windows_job_attached_and_closed(self):
         job = Mock()
         with (
@@ -112,6 +144,30 @@ class CommandEvidence(unittest.TestCase):
         self.assertTrue(result["timeout"])
         job.attach.assert_called_once()
         self.assertGreaterEqual(job.close.call_count, 1)
+
+    def test_windows_job_closed_on_output_limit(self):
+        job = Mock()
+        with (
+            patch("patchtransit.core.os", wraps=os) as simulated_os,
+            patch("patchtransit._windows_job.WindowsJob", return_value=job),
+            patch("patchtransit.core.MAX_COMMAND_OUTPUT_BYTES", 1024),
+        ):
+            simulated_os.name = "nt"
+            result = execute(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import sys,time; sys.stdout.write('x'*8192); "
+                        "sys.stdout.flush(); time.sleep(10)"
+                    ),
+                ],
+                self.root,
+                timeout=3,
+            )
+        self.assertEqual("OutputLimitExceeded", result["error"])
+        job.attach.assert_called_once()
+        job.close.assert_called()
 
     def test_windows_job_attach_error_stops_command(self):
         job = Mock()
