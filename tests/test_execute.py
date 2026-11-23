@@ -64,6 +64,25 @@ class CommandEvidence(unittest.TestCase):
         self.assertTrue(result["timeout"])
         self.assertNotIn("stdout_sha256", result)
 
+    def test_timeout_stops_child_processes(self):
+        marker = self.root / "orphan.txt"
+        child = (
+            "import pathlib,time; "
+            "time.sleep(2); "
+            f"pathlib.Path({str(marker)!r}).write_text('still running')"
+        )
+        parent = (
+            "import subprocess,sys,time; "
+            f"subprocess.Popen([sys.executable,'-c',{child!r}]); "
+            "time.sleep(8)"
+        )
+        result = execute([sys.executable, "-c", parent], self.root, timeout=1)
+        self.assertTrue(result["timeout"])
+        time.sleep(3)
+        self.assertFalse(
+            marker.exists(), "A timed-out verification left a child running"
+        )
+
     def test_missing_executable_reports_error(self):
         result = execute(
             ["patchtransit-executable-does-not-exist"], self.root, timeout=1
