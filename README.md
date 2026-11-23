@@ -138,7 +138,7 @@ Exit codes: `0` for successful comparison with no confirmed regression, `1` if t
 
 ## Security and privacy
 
-- The tool never executes the patch itself. The optional `--execute` runs a command in the patched tree and has **no OS sandbox**.
+- The tool never executes the patch itself. The optional `--execute` runs a command in the patched tree and has **no OS sandbox**. Timed-out or output-limited checks also terminate their process group on POSIX or their job on Windows, but detached processes may still survive.
 - Reports contain code paths and **diff contents**. Inspect before sharing for proprietary source, personal data, or secrets. The CLI escapes control characters, invalid pathname bytes and bidirectional formatting characters in terminal output; JSON evidence retains the original path values (encoded safely as needed).
 - Whole-tree SHA-256 fingerprints are based on each path, file type/mode and content digest; changing the text-preview threshold does not change the fingerprint of an identical tree. At most 64 MiB of regular-file data is retained inline per candidate for readable diffs, and the sum of tracked path bytes is independently capped at 64 MiB per tree. Other files are represented by streamed digests, so the JSON change manifest remains complete even when the text preview is omitted.
 - The JSON records test exit codes, elapsed time and hashes of stdout/stderr. It intentionally does **not** copy raw test logs or environment variables into evidence. Command output is captured in temporary files and hashed in chunks rather than accumulated in process memory. Temporary files are deleted after each check, and each output stream has a 64 MiB safety cap.

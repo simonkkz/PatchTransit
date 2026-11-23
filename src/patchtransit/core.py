@@ -1203,7 +1203,24 @@ def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> CommandEvide
         raise PatchTransitError("Verification command must specify an executable")
     timeout_seconds = _timeout_seconds(timeout)
     started = time.monotonic()
+    job = None
     try:
+        if os.name == "nt":
+            from ._windows_job import WindowsJob
+
+            job = WindowsJob()
+
+        def stop_group(process: subprocess.Popen[bytes]) -> None:
+            if job is not None:
+                job.close()
+            else:
+                try:
+                    os.kill(-process.pid, 9)
+                except OSError:
+                    pass
+            if process.poll() is None:
+                process.kill()
+
         # Anonymous temporary files avoid waiting for pipes inherited by a
         # command's descendants. They are removed on close, not in evidence.
         with (
@@ -1219,16 +1236,22 @@ def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> CommandEvide
                 stdout=stdout,
                 stderr=stderr,
                 stdin=subprocess.DEVNULL,
+                start_new_session=os.name != "nt",
             ) as process:
+                if job is not None:
+                    try:
+                        job.attach(process)
+                    except OSError:
+                        stop_group(process)
+                        raise
                 deadline = started + timeout_seconds
                 while True:
                     if (
                         os.fstat(stdout.fileno()).st_size > MAX_COMMAND_OUTPUT_BYTES
                         or os.fstat(stderr.fileno()).st_size > MAX_COMMAND_OUTPUT_BYTES
                     ):
-                        if process.poll() is None:
-                            process.kill()
-                            process.wait()
+                        stop_group(process)
+                        process.wait()
                         return {
                             "exit_code": None,
                             "error": "OutputLimitExceeded",
@@ -1236,9 +1259,8 @@ def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> CommandEvide
                         }
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
-                        if process.poll() is None:
-                            process.kill()
-                            process.wait()
+                        stop_group(process)
+                        process.wait()
                         return {
                             "exit_code": None,
                             "timeout": True,
@@ -1270,6 +1292,9 @@ def execute(command: list[str], cwd: pathlib.Path, timeout: int) -> CommandEvide
             "error": type(exc).__name__,
             "duration_ms": round((time.monotonic() - started) * 1000),
         }
+    finally:
+        if job is not None:
+            job.close()
 
 
 def _snapshot_patch(source: pathlib.Path, destination: pathlib.Path) -> pathlib.Path:

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Stop descendant verification processes when a check times out or exceeds its output limit.
+
 ## 1.0.1
 
 - Reap Git subprocess descendants that inherit export pipes when the export deadline expires.
