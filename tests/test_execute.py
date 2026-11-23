@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from patchtransit.core import execute
 
@@ -83,6 +85,50 @@ class CommandEvidence(unittest.TestCase):
             marker.exists(), "A timed-out verification left a child running"
         )
 
+    def test_windows_job_attached_and_closed(self):
+        job = Mock()
+        with (
+            patch("patchtransit.core.os", wraps=os) as simulated_os,
+            patch("patchtransit._windows_job.WindowsJob", return_value=job),
+        ):
+            simulated_os.name = "nt"
+            result = execute([sys.executable, "-c", "pass"], self.root, timeout=3)
+        self.assertEqual(0, result["exit_code"])
+        job.attach.assert_called_once()
+        job.close.assert_called_once()
+
+    def test_windows_job_closed_on_timeout(self):
+        job = Mock()
+        with (
+            patch("patchtransit.core.os", wraps=os) as simulated_os,
+            patch("patchtransit._windows_job.WindowsJob", return_value=job),
+        ):
+            simulated_os.name = "nt"
+            result = execute(
+                [sys.executable, "-c", "import time; time.sleep(10)"],
+                self.root,
+                timeout=1,
+            )
+        self.assertTrue(result["timeout"])
+        job.attach.assert_called_once()
+        self.assertGreaterEqual(job.close.call_count, 1)
+
+    def test_windows_job_attach_error_stops_command(self):
+        job = Mock()
+        job.attach.side_effect = OSError("job assignment failed")
+        with (
+            patch("patchtransit.core.os", wraps=os) as simulated_os,
+            patch("patchtransit._windows_job.WindowsJob", return_value=job),
+        ):
+            simulated_os.name = "nt"
+            result = execute(
+                [sys.executable, "-c", "import time; time.sleep(10)"],
+                self.root,
+                timeout=3,
+            )
+        self.assertEqual("OSError", result["error"])
+        job.close.assert_called()
+
     def test_missing_executable_reports_error(self):
         result = execute(
             ["patchtransit-executable-does-not-exist"], self.root, timeout=1
@@ -109,8 +155,6 @@ class CommandEvidence(unittest.TestCase):
         )
 
     def test_excessive_output_is_bounded(self):
-        from unittest.mock import patch
-
         script = "import sys; sys.stdout.buffer.write(b'x' * 8192)"
         with patch("patchtransit.core.MAX_COMMAND_OUTPUT_BYTES", 1024):
             result = execute([sys.executable, "-c", script], self.root, timeout=10)
@@ -119,8 +163,6 @@ class CommandEvidence(unittest.TestCase):
         self.assertNotIn("stdout_sha256", result)
 
     def test_output_limit_interrupts_a_still_running_command(self):
-        from unittest.mock import patch
-
         script = (
             "import sys,time; "
             "sys.stderr.buffer.write(b'x' * 8192); "
